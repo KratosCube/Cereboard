@@ -1,0 +1,61 @@
+﻿@page "/"
+@using Cereboard.Shared.Models
+@inject HttpClient Http
+@inject IConfiguration Configuration
+@inject IJSRuntime JS
+
+<h1>Cereboard Dashboard</h1>
+
+@if (boards == null)
+{
+        <p>Načítání...</p>
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+                <div class="alert alert-danger">
+            @errorMessage
+                    <div>API URL: @apiUrl</div>
+                </div>
+    }
+}
+else
+{
+        <div class="board-list">
+        @foreach (var board in boards)
+        {
+                    <div class="board-card">
+                        <h3>@board.Name</h3>
+                        <p>@board.Description</p>
+                        <small>Vytvořeno: @board.CreatedAt.ToShortDateString()</small>
+                    </div>
+        }
+        </div>
+}
+
+@code {
+    private Board[]? boards;
+    private string? errorMessage;
+    private string apiUrl = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            apiUrl = Http.BaseAddress?.ToString() ?? "Není nastaveno";
+
+            // Logování pro debugging
+            await JS.InvokeVoidAsync("console.log", $"Pokus o načtení z: {apiUrl}api/Boards");
+
+            boards = await Http.GetFromJsonAsync<Board[]>("api/Boards");
+
+            if (boards == null)
+            {
+                errorMessage = "Nebyly získány žádné nástěnky.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Chyba při načítání: {ex.Message}";
+            await JS.InvokeVoidAsync("console.log", ex.ToString());
+        }
+    }
+}

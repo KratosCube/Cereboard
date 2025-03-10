@@ -1,0 +1,6 @@
+@Cereboard.Server_HostAddress = http://localhost:5041
+
+GET {{Cereboard.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
