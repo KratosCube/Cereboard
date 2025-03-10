@@ -1,6 +1,7 @@
 using Cereboard;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using MudBlazor.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -26,6 +27,8 @@ builder.Services.AddScoped(sp =>
 
     return client;
 });
+
+builder.Services.AddMudServices();
 
 builder.Services.AddOidcAuthentication(options =>
 {

@@ -1,0 +1,236 @@
+﻿@page "/board/{Id:int}"
+@using Cereboard.Shared.Models
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<MudText Typo="Typo.h3" Class="mb-2">@board?.Name</MudText>
+<MudText Typo="Typo.body1" Class="mb-4">@board?.Description</MudText>
+
+@if (board == null)
+{
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+}
+else if (board.Columns != null)
+{
+        <div class="d-flex gap-4 overflow-auto py-4">
+            <MudDropContainer T="TaskItem" 
+                             Items="allTasks" 
+                             ItemsSelector="@((item, dropzone) => item.ColumnId.ToString() == dropzone)"
+                             ItemDropped="ItemUpdated"
+                             Class="d-flex gap-4">
+                <ChildContent>
+                @foreach (var column in board.Columns.OrderBy(c => c.Order))
+                {
+                            <MudPaper Elevation="2" Class="pa-4" Style="min-width: 300px;">
+                                <MudText Typo="Typo.h6" Class="mb-3">@column.Name</MudText>
+
+                                <MudDropZone T="TaskItem" 
+                                           Identifier="@column.Id.ToString()" 
+                                           Class="d-flex flex-column gap-2"
+                                           Style="min-height: 200px;">
+                                </MudDropZone>
+
+                        @if (showNewTaskInput && newTaskColumnId == column.Id)
+                        {
+                                        <div class="pa-2 mt-3 d-flex flex-column gap-2">
+                                            <MudTextField @bind-Value="newTaskTitle" Label="Název úkolu" Variant="Variant.Outlined" Immediate="true" />
+                                            <div class="d-flex gap-2">
+                                                <MudButton Color="Color.Primary" OnClick="SaveNewTask">Přidat</MudButton>
+                                                <MudButton Color="Color.Default" OnClick="CancelNewTask">Zrušit</MudButton>
+                                            </div>
+                                        </div>
+                        }
+                        else
+                        {
+                                        <MudButton FullWidth="true"
+                                                StartIcon="@Icons.Material.Filled.Add"
+                                                Color="Color.Primary"
+                                                Variant="Variant.Text"
+                                                OnClick="@(() => ShowNewTaskInput(column.Id))"
+                                                Class="mt-3">
+                                            Přidat úkol
+                                        </MudButton>
+                        }
+                            </MudPaper>
+                }
+
+                @if (showNewColumnInput)
+                {
+                            <MudPaper Elevation="2" Class="pa-4" Style="min-width: 300px;">
+                                <div class="d-flex flex-column gap-2">
+                                    <MudTextField @bind-Value="newColumnName" Label="Název sloupce" Variant="Variant.Outlined" Immediate="true" />
+                                    <div class="d-flex gap-2">
+                                        <MudButton Color="Color.Primary" OnClick="SaveNewColumn">Přidat</MudButton>
+                                        <MudButton Color="Color.Default" OnClick="CancelNewColumn">Zrušit</MudButton>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                }
+
+                    <MudPaper Elevation="0" Style="min-width: 100px;" Class="d-flex align-center justify-center">
+                        <MudButton Variant="Variant.Outlined"
+                                 StartIcon="@Icons.Material.Filled.Add"
+                                 Color="Color.Default"
+                                 OnClick="ShowNewColumnInput">
+                            Přidat sloupec
+                        </MudButton>
+                    </MudPaper>
+                </ChildContent>
+
+                <ItemRenderer>
+                    <MudPaper Elevation="1" Class="pa-3 mb-2" Style="width: 100%;">
+                        <MudText Typo="Typo.h6">@context.Title</MudText>
+                        <MudText Typo="Typo.body2">@context.Description</MudText>
+                    @if (context.DueDate.HasValue)
+                    {
+                                <MudText Class="mt-2" Typo="Typo.caption">
+                                    Termín: @context.DueDate.Value.ToShortDateString()
+                                </MudText>
+                    }
+                    </MudPaper>
+                </ItemRenderer>
+            </MudDropContainer>
+        </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Board? board;
+    private List<TaskItem> allTasks = new();
+    
+    // Pro přidávání úkolů
+    private bool showNewTaskInput = false;
+    private int newTaskColumnId = 0;
+    private string newTaskTitle = "";
+    
+    // Pro přidávání sloupců
+    private bool showNewColumnInput = false;
+    private string newColumnName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBoardData();
+    }
+
+    private async Task LoadBoardData()
+    {
+        try
+        {
+            board = await Http.GetFromJsonAsync<Board>($"api/boards/{Id}");
+            if (board?.Columns != null)
+            {
+                // Vytvoření plochého seznamu všech úkolů pro MudDropContainer
+                allTasks = board.Columns.SelectMany(c => c.Tasks).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+    
+    private void ItemUpdated(MudItemDropInfo<TaskItem> dropInfo)
+    {
+        // Aktualizace ColumnId úkolu
+        int newColumnId = int.Parse(dropInfo.DropzoneIdentifier);
+        int oldColumnId = dropInfo.Item.ColumnId;
+        
+        // Přiřazení úkolu do nového sloupce
+        if (oldColumnId != newColumnId)
+        {
+            // Najít původní sloupec a odstranit úkol
+            var sourceColumn = board?.Columns.FirstOrDefault(c => c.Id == oldColumnId);
+            sourceColumn?.Tasks.Remove(dropInfo.Item);
+            
+            // Najít cílový sloupec a přidat úkol
+            var targetColumn = board?.Columns.FirstOrDefault(c => c.Id == newColumnId);
+            if (targetColumn != null)
+            {
+                dropInfo.Item.ColumnId = newColumnId;
+                targetColumn.Tasks.Add(dropInfo.Item);
+            }
+        }
+        
+        // V reálné aplikaci byste zde odeslali data na server
+        // await Http.PutAsJsonAsync($"api/tasks/{dropInfo.Item.Id}", dropInfo.Item);
+    }
+    
+    // Metody pro přidávání úkolů
+    private void ShowNewTaskInput(int columnId)
+    {
+        showNewTaskInput = true;
+        newTaskColumnId = columnId;
+        newTaskTitle = "";
+    }
+    
+    private void SaveNewTask()
+    {
+        if (string.IsNullOrWhiteSpace(newTaskTitle)) return;
+        
+        var column = board?.Columns.FirstOrDefault(c => c.Id == newTaskColumnId);
+        if (column != null)
+        {
+            // Najít maximální ID napříč všemi úkoly
+            int maxId = allTasks.Any() ? allTasks.Max(t => t.Id) : 0;
+            
+            var task = new TaskItem
+            {
+                Id = maxId + 1,
+                Title = newTaskTitle,
+                Description = "",
+                ColumnId = newTaskColumnId,
+                Order = column.Tasks.Any() ? column.Tasks.Max(t => t.Order) + 1 : 1
+            };
+            
+            column.Tasks.Add(task);
+            allTasks.Add(task); // Přidat také do plochého seznamu
+            
+            // Resetujeme stav
+            showNewTaskInput = false;
+            newTaskColumnId = 0;
+            newTaskTitle = "";
+        }
+    }
+    
+    private void CancelNewTask()
+    {
+        showNewTaskInput = false;
+        newTaskColumnId = 0;
+        newTaskTitle = "";
+    }
+    
+    // Metody pro přidávání sloupců
+    private void ShowNewColumnInput()
+    {
+        showNewColumnInput = true;
+        newColumnName = "";
+    }
+    
+    private void SaveNewColumn()
+    {
+        if (string.IsNullOrWhiteSpace(newColumnName) || board == null) return;
+        
+        var column = new Column
+        {
+            Id = board.Columns.Any() ? board.Columns.Max(c => c.Id) + 1 : 1,
+            Name = newColumnName,
+            BoardId = Id,
+            Order = board.Columns.Any() ? board.Columns.Max(c => c.Order) + 1 : 1,
+            Tasks = new List<TaskItem>()
+        };
+        
+        board.Columns.Add(column);
+        
+        // Resetujeme stav
+        showNewColumnInput = false;
+        newColumnName = "";
+    }
+    
+    private void CancelNewColumn()
+    {
+        showNewColumnInput = false;
+        newColumnName = "";
+    }
+}
