@@ -5,9 +5,9 @@ VisualStudioVersion = 17.10.35004.147
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cereboard", "Cereboard\Cereboard.csproj", "{92FC0C32-FE8B-4074-85B7-EFB2960A9AAC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cereboard.Server", "Cereboard.Server\Cereboard.Server.csproj", "{4A7817C2-7AA5-4033-A682-C69C4223B2BC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cereboard.Server", "Cereboard.Server\Cereboard.Server.csproj", "{4A7817C2-7AA5-4033-A682-C69C4223B2BC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cereboard.Shared", "Cereboard.Shared\Cereboard.Shared.csproj", "{DFCF3846-6024-47FE-9479-9E6EDE49CEA5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Cereboard.Shared", "Cereboard.Shared\Cereboard.Shared.csproj", "{DFCF3846-6024-47FE-9479-9E6EDE49CEA5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

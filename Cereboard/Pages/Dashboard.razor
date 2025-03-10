@@ -1,61 +1,144 @@
 ﻿@page "/"
 @using Cereboard.Shared.Models
 @inject HttpClient Http
-@inject IConfiguration Configuration
-@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
 
-<h1>Cereboard Dashboard</h1>
+<MudText Typo="Typo.h3" Class="mb-4">Moje nástěnky</MudText>
 
 @if (boards == null)
 {
-        <p>Načítání...</p>
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-                <div class="alert alert-danger">
-            @errorMessage
-                    <div>API URL: @apiUrl</div>
-                </div>
-    }
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
 }
 else
 {
-        <div class="board-list">
+        <MudGrid>
         @foreach (var board in boards)
         {
-                    <div class="board-card">
-                        <h3>@board.Name</h3>
-                        <p>@board.Description</p>
-                        <small>Vytvořeno: @board.CreatedAt.ToShortDateString()</small>
-                    </div>
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <MudCard Elevation="3" Class="rounded-lg" Style="height:100%;" @onclick="@(() => NavigateTo(board.Id))">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h5">@board.Name</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudText Typo="Typo.body2">@board.Description</MudText>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudText Typo="Typo.caption" Class="ml-2 mud-text-secondary">
+                                    Vytvořeno: @board.CreatedAt.ToShortDateString()
+                                </MudText>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
         }
-        </div>
+
+            <MudItem xs="12" sm="6" md="4" lg="3">
+            @if (showNewBoardInput)
+            {
+                        <MudCard Elevation="3" Class="rounded-lg pa-4" Style="height:100%;">
+                            <MudCardContent>
+                                <MudTextField @bind-Value="newBoardName" 
+                                             Label="Název nástěnky" 
+                                             Variant="Variant.Outlined" 
+                                             Class="mb-3" />
+
+                                <MudTextField @bind-Value="newBoardDescription" 
+                                             Label="Popis" 
+                                             Variant="Variant.Outlined" 
+                                             Lines="3" 
+                                             Class="mb-3" />
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Color="Color.Primary" 
+                                          OnClick="SaveNewBoard" 
+                                          Variant="Variant.Filled">Vytvořit</MudButton>
+                                <MudButton Color="Color.Default" 
+                                          OnClick="CancelNewBoard">Zrušit</MudButton>
+                            </MudCardActions>
+                        </MudCard>
+            }
+            else
+            {
+                        <MudCard Elevation="2" 
+                                Class="rounded-lg d-flex align-center justify-center mud-border-dotted" 
+                                Style="height:100%;"
+                                @onclick="ShowNewBoardInput">
+                            <MudCardContent>
+                                <div class="d-flex flex-column align-center pa-4">
+                                    <MudIcon Icon="@Icons.Material.Filled.Add" 
+                                            Size="Size.Large" 
+                                            Class="mb-3" />
+                                    <MudText Typo="Typo.h6">Vytvořit novou nástěnku</MudText>
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+            }
+            </MudItem>
+        </MudGrid>
 }
 
 @code {
     private Board[]? boards;
-    private string? errorMessage;
-    private string apiUrl = "";
+
+    // Pro přidávání nových nástěnek
+    private bool showNewBoardInput = false;
+    private string newBoardName = "";
+    private string newBoardDescription = "";
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            apiUrl = Http.BaseAddress?.ToString() ?? "Není nastaveno";
-
-            // Logování pro debugging
-            await JS.InvokeVoidAsync("console.log", $"Pokus o načtení z: {apiUrl}api/Boards");
-
-            boards = await Http.GetFromJsonAsync<Board[]>("api/Boards");
-
-            if (boards == null)
-            {
-                errorMessage = "Nebyly získány žádné nástěnky.";
-            }
+            boards = await Http.GetFromJsonAsync<Board[]>("api/boards");
         }
         catch (Exception ex)
         {
-            errorMessage = $"Chyba při načítání: {ex.Message}";
-            await JS.InvokeVoidAsync("console.log", ex.ToString());
+            Console.WriteLine($"Chyba při načítání: {ex.Message}");
         }
+    }
+
+    private void NavigateTo(int boardId)
+    {
+        NavigationManager.NavigateTo($"/board/{boardId}");
+    }
+
+    // Metody pro přidávání nových nástěnek
+    private void ShowNewBoardInput()
+    {
+        showNewBoardInput = true;
+        newBoardName = "";
+        newBoardDescription = "";
+    }
+
+    private void SaveNewBoard()
+    {
+        if (string.IsNullOrWhiteSpace(newBoardName)) return;
+
+        var newBoard = new Board
+            {
+                Id = boards?.Any() == true ? boards.Max(b => b.Id) + 1 : 1,
+                Name = newBoardName,
+                Description = newBoardDescription,
+                CreatedAt = DateTime.Now,
+                Columns = new List<Column>()
+            };
+
+        // Přidáme novou nástěnku do pole
+        var boardsList = boards?.ToList() ?? new List<Board>();
+        boardsList.Add(newBoard);
+        boards = boardsList.ToArray();
+
+        // Resetujeme stav
+        showNewBoardInput = false;
+        newBoardName = "";
+        newBoardDescription = "";
+    }
+
+    private void CancelNewBoard()
+    {
+        showNewBoardInput = false;
+        newBoardName = "";
+        newBoardDescription = "";
     }
 }

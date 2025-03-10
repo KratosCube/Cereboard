@@ -116,3 +116,50 @@ code {
     width: 300px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+
+.kanban-board {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    overflow-x: auto;
+    min-height: 600px;
+}
+
+.kanban-column {
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    width: 300px;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.column-header {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+}
+
+.column-content {
+    flex-grow: 1;
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.column-footer {
+    padding: 12px;
+    border-top: 1px solid #ddd;
+}
+
+.task-card {
+    background-color: white;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer;
+}
+
+    .task-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
