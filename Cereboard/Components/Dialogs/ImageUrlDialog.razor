@@ -1,0 +1,163 @@
+﻿@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+@inject IJSRuntime JS
+
+<style>
+    .upload-container {
+        border: 2px dashed var(--mud-palette-lines-default);
+        border-radius: 4px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 16px;
+        cursor: pointer;
+    }
+
+    .upload-container:hover {
+        border-color: var(--mud-palette-primary);
+    }
+
+    .or-divider {
+        display: flex;
+        align-items: center;
+        text-align: center;
+        margin: 16px 0;
+    }
+
+    .or-divider::before,
+    .or-divider::after {
+        content: '';
+        flex: 1;
+        border-bottom: 1px solid var(--mud-palette-lines-default);
+    }
+
+    .or-divider span {
+        padding: 0 10px;
+    }
+
+    .preview-image {
+        max-width: 100%;
+        max-height: 200px;
+        margin-top: 16px;
+        border-radius: 4px;
+    }
+</style>
+
+<MudDialog>
+    <DialogContent>
+        <div>
+            @if (!string.IsNullOrEmpty(previewImageData))
+            {
+                    <div class="text-center mb-3">
+                        <img src="@previewImageData" class="preview-image" />
+                    </div>
+            }
+
+            <InputFile id="fileInput" OnChange="OnFileSelected" hidden />
+
+            <div class="upload-container" @onclick="BrowseFiles">
+                <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Size="Size.Large" Class="mb-2" />
+                <div>Klikněte zde pro výběr obrázku z vašeho zařízení</div>
+                <div class="mud-text-secondary">nebo přetáhněte soubor sem</div>
+            </div>
+
+            <div class="or-divider">
+                <span>nebo</span>
+            </div>
+
+            <MudTextField @bind-Value="ImageUrl" 
+                         Label="URL obrázku z internetu" 
+                         Placeholder="https://example.com/image.jpg"
+                         Immediate="true"
+                         FullWidth="true" />
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Zrušit</MudButton>
+        <MudButton Color="Color.Primary" 
+                 OnClick="Submit" 
+                 Disabled="@(string.IsNullOrEmpty(ImageUrl) && string.IsNullOrEmpty(previewImageData))">
+            Vložit
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    public string ImageUrl { get; set; } = "";
+    private string previewImageData = "";
+    private const int MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file == null) return;
+
+            // Kontrola typu souboru
+            if (!file.ContentType.StartsWith("image/"))
+            {
+                await JS.InvokeVoidAsync("alert", "Prosím vyberte obrázek (PNG, JPG, GIF, atd.)");
+                return;
+            }
+
+            // Kontrola velikosti souboru
+            if (file.Size > MaxFileSizeBytes)
+            {
+                await JS.InvokeVoidAsync("alert", "Obrázek je příliš velký. Maximální velikost je 5MB.");
+                return;
+            }
+
+            // Načtení souboru do paměti a převod na Base64
+            using var stream = file.OpenReadStream(MaxFileSizeBytes);
+            using var memoryStream = new MemoryStream();
+            await stream.CopyToAsync(memoryStream);
+
+            var fileBytes = memoryStream.ToArray();
+            var base64String = Convert.ToBase64String(fileBytes);
+
+            // Vytvoření data URL
+            previewImageData = $"data:{file.ContentType};base64,{base64String}";
+
+            // Zrušení URL, protože nyní používáme nahraný soubor
+            ImageUrl = "";
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", "Chyba při nahrávání obrázku:", ex.Message);
+            await JS.InvokeVoidAsync("alert", "Nastala chyba při zpracování obrázku.");
+        }
+    }
+
+    private async Task BrowseFiles()
+    {
+        // Simuluje kliknutí na skrytý input[type="file"]
+        await JS.InvokeVoidAsync("document.getElementById", "fileInput", "click");
+    }
+
+    void Submit()
+    {
+        // Pokud máme nahraný obrázek, použijeme ho
+        if (!string.IsNullOrEmpty(previewImageData))
+        {
+            MudDialog.Close(DialogResult.Ok(previewImageData));
+            return;
+        }
+
+        // Jinak zkontrolujeme URL
+        if (Uri.TryCreate(ImageUrl, UriKind.Absolute, out var uriResult)
+            && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
+        {
+            MudDialog.Close(DialogResult.Ok(ImageUrl));
+        }
+        else
+        {
+            // Základní oznámení o neplatné URL
+            JS.InvokeVoidAsync("alert", "Prosím zadejte platnou URL adresu obrázku");
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}
