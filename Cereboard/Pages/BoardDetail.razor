@@ -1,7 +1,10 @@
 ﻿@page "/board/{Id:int}"
+@using Cereboard.Components.Dialogs
 @using Cereboard.Shared.Models
 @inject HttpClient Http
 @inject IJSRuntime JS
+ @inject DialogService DialogService
+ @inject IDialogService DialogService
 
 <MudText Typo="Typo.h3" Class="mb-2">@board?.Name</MudText>
 <MudText Typo="Typo.body1" Class="mb-4">@board?.Description</MudText>
@@ -77,18 +80,18 @@ else if (board.Columns != null)
                     </MudPaper>
                 </ChildContent>
 
-                <ItemRenderer>
-                    <MudPaper Elevation="1" Class="pa-3 mb-2" Style="width: 100%;">
-                        <MudText Typo="Typo.h6">@context.Title</MudText>
-                        <MudText Typo="Typo.body2">@context.Description</MudText>
+                    <ItemRenderer>
+        <MudPaper Elevation="1" Class="pa-3 mb-2" Style="width: 100%;" @onclick="@(() => OpenTaskDetail(context))">
+            <MudText Typo="Typo.h6">@context.Title</MudText>
+            <MudText Typo="Typo.body2">@context.Description</MudText>
                     @if (context.DueDate.HasValue)
                     {
-                                <MudText Class="mt-2" Typo="Typo.caption">
-                                    Termín: @context.DueDate.Value.ToShortDateString()
-                                </MudText>
+                    <MudText Class="mt-2" Typo="Typo.caption">
+                        Termín: @context.DueDate.Value.ToShortDateString()
+                    </MudText>
                     }
-                    </MudPaper>
-                </ItemRenderer>
+        </MudPaper>
+    </ItemRenderer>
             </MudDropContainer>
         </div>
 }
@@ -131,7 +134,7 @@ else if (board.Columns != null)
         }
     }
     
-    private void ItemUpdated(MudItemDropInfo<TaskItem> dropInfo)
+    private async Task ItemUpdated(MudItemDropInfo<TaskItem> dropInfo)
     {
         // Aktualizace ColumnId úkolu
         int newColumnId = int.Parse(dropInfo.DropzoneIdentifier);
@@ -154,9 +157,34 @@ else if (board.Columns != null)
         }
         
         // V reálné aplikaci byste zde odeslali data na server
-        // await Http.PutAsJsonAsync($"api/tasks/{dropInfo.Item.Id}", dropInfo.Item);
+        await Http.PutAsJsonAsync($"api/tasks/{dropInfo.Item.Id}", dropInfo.Item);
     }
-    
+    private async Task OpenTaskDetail(TaskItem task)
+    {
+        var parameters = new DialogParameters { ["task"] = task };
+
+        // Použití Try-Catch pro odchycení případných chyb
+        try
+        {
+            var dialog = await DialogService.ShowAsync<TaskDetailDialog>("Detail úkolu", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Canceled)
+            {
+                if (result.Data is string && (string)result.Data == "delete")
+                {
+                    // Smazání úkolu
+                    var column = board?.Columns.FirstOrDefault(c => c.Id == task.ColumnId);
+                    column?.Tasks.Remove(task);
+                    allTasks.Remove(task);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", "Chyba při otevírání dialogu:", ex.Message);
+        }
+    }
     // Metody pro přidávání úkolů
     private void ShowNewTaskInput(int columnId)
     {

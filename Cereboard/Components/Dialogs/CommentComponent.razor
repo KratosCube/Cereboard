@@ -1,0 +1,202 @@
+﻿@using Cereboard.Shared.Models
+
+<div class="comment-header">
+    <MudAvatar Color="Color.Primary" Size="Size.Small" Class="comment-avatar">A</MudAvatar>
+    <MudText Typo="Typo.subtitle1">Anonym</MudText>
+    <MudText Typo="Typo.caption" Class="ml-2 mud-text-secondary">
+        @Comment.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+    </MudText>
+</div>
+
+<div class="px-3 pt-2">
+    @if (EditingCommentId == Comment.Id)
+    {
+            <MudTextField @bind-Value="Comment.Text" Lines="3" Variant="Variant.Outlined" 
+                        Immediate="true" Class="mb-2" 
+                        @onfocus="@(() => OnSetActiveEditor?.Invoke($"comment_{Comment.Id}"))"
+                        id="@($"comment-textarea-{Comment.Id}")"
+                        @onkeydown="@(e => OnHandleKeyDown?.Invoke(e, $"comment_{Comment.Id}"))" />
+            <div class="d-flex justify-end">
+                <MudButton Variant="Variant.Text" Color="Color.Default" 
+                         OnClick="@(() => OnSetEditingComment?.Invoke(null))" Class="mr-2">Zrušit</MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Primary" 
+                         OnClick="@(() => OnSetEditingComment?.Invoke(null))">Uložit</MudButton>
+            </div>
+    }
+    else
+    {
+            <div class="markdown-area markdown-preview" style="min-height: unset; border: none; padding: 0;">
+            @((MarkupString)ConvertMarkdownToHtml(Comment.Text))
+            </div>
+
+            <div class="d-flex mt-2">
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                         OnClick="@(() => OnSetReplyingTo?.Invoke(Comment.Id))">
+                    Odpovědět
+                </MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                         OnClick="@(() => OnSetEditingComment?.Invoke(Comment.Id))" Class="ml-2">
+                    Upravit
+                </MudButton>
+                <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small"
+                         OnClick="@(() => OnDeleteComment?.Invoke(Comment.Id))" Class="ml-2">
+                    Smazat
+                </MudButton>
+            </div>
+    }
+</div>
+
+<!-- Formulář pro odpověď -->
+@if (ReplyingToId == Comment.Id)
+{
+        <div class="comment-reply">
+            <MudTextField @bind-Value="currentReplyText" Placeholder="Napište odpověď..."
+                        Lines="2" Variant="Variant.Outlined" Class="mb-2"
+                        @onfocus="@(() => OnSetActiveEditor?.Invoke("reply"))"
+                        id="reply-textarea"
+                        @onkeydown="@(e => OnHandleKeyDown?.Invoke(e, "reply"))" />
+            <div class="d-flex justify-end">
+                <MudButton Variant="Variant.Text" Color="Color.Default" 
+                         OnClick="@(() => OnSetReplyingTo?.Invoke(0))" Class="mr-2">
+                    Zrušit
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                         OnClick="@(() => { OnAddReply?.Invoke(Comment.Id, currentReplyText); currentReplyText = ""; })" 
+                         Disabled="@(string.IsNullOrWhiteSpace(currentReplyText))">
+                    Odpovědět
+                </MudButton>
+            </div>
+        </div>
+}
+
+<!-- Odpovědi na komentář - rekurzivní zobrazení -->
+@foreach (var reply in Comments.Where(c => c.ParentCommentId == Comment.Id).OrderBy(c => c.CreatedAt))
+{
+        <div class="comment-reply">
+            <CommentComponent Comment="reply" 
+                             Comments="Comments" 
+                             EditingCommentId="EditingCommentId" 
+                             ReplyingToId="ReplyingToId" 
+                             OnSetReplyingTo="OnSetReplyingTo" 
+                             OnSetEditingComment="OnSetEditingComment" 
+                             OnDeleteComment="OnDeleteComment" 
+                             OnAddReply="OnAddReply" 
+                             OnHandleKeyDown="OnHandleKeyDown" 
+                             ActiveEditor="ActiveEditor" 
+                             OnSetActiveEditor="OnSetActiveEditor" 
+                             ReplyText="ReplyText" 
+                             OnReplyTextChanged="OnReplyTextChanged" />
+        </div>
+}
+
+@code {
+    [Parameter] public TaskDetailDialog.TaskComment Comment { get; set; } = default!;
+    [Parameter] public List<TaskDetailDialog.TaskComment> Comments { get; set; } = default!;
+    [Parameter] public int? EditingCommentId { get; set; }
+    [Parameter] public int? ReplyingToId { get; set; }
+    [Parameter] public Action<int>? OnSetReplyingTo { get; set; }
+    [Parameter] public Action<int?>? OnSetEditingComment { get; set; }
+    [Parameter] public Action<int>? OnDeleteComment { get; set; }
+    [Parameter] public Action<int, string>? OnAddReply { get; set; }
+    [Parameter] public Func<KeyboardEventArgs, string, Task>? OnHandleKeyDown { get; set; }
+    [Parameter] public string ActiveEditor { get; set; } = "";
+    [Parameter] public Action<string>? OnSetActiveEditor { get; set; }
+    [Parameter] public string ReplyText { get; set; } = "";
+    [Parameter] public Action<string>? OnReplyTextChanged { get; set; }
+
+    // Lokální stav pro text odpovědi
+    private string currentReplyText
+    {
+        get => ReplyText;
+        set
+        {
+            if (OnReplyTextChanged != null)
+                OnReplyTextChanged(value);
+        }
+    }
+
+    private string ConvertMarkdownToHtml(string markdown)
+    {
+        // Toto je zjednodušená implementace, v reálné aplikaci byste použili Markdown parser
+        if (string.IsNullOrWhiteSpace(markdown)) return "<i>Žádný obsah</i>";
+
+        var html = markdown;
+
+        // Zpracování nadpisů
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"^# (.+)$",
+            "<h1>$1</h1>",
+            System.Text.RegularExpressions.RegexOptions.Multiline
+        );
+
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"^## (.+)$",
+            "<h2>$1</h2>",
+            System.Text.RegularExpressions.RegexOptions.Multiline
+        );
+
+        // Tučný text - musí být páry ** **
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"\*\*([^*]+)\*\*",
+            "<strong>$1</strong>"
+        );
+
+        // Kurzíva - musí být páry * *
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"\*([^*]+)\*",
+            "<em>$1</em>"
+        );
+
+        // Přeškrtnutí - musí být páry ~~ ~~
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"\~\~([^~]+)\~\~",
+            "<s>$1</s>"
+        );
+
+        // Odkazy
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"\[([^\]]+)\]\(([^)]+)\)",
+            "<a href=\"$2\" target=\"_blank\">$1</a>"
+        );
+
+        // Obrázky
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"!\[([^\]]*)\]\(([^)]+)\)",
+            "<img src=\"$2\" alt=\"$1\" style=\"max-width:100%;\">"
+        );
+
+        // Kódové bloky
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"```(.*?)\n([\s\S]*?)```",
+            "<pre><code class=\"language-$1\">$2</code></pre>",
+            System.Text.RegularExpressions.RegexOptions.Singleline
+        );
+
+        // Inline kód
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"`([^`]+)`",
+            "<code>$1</code>"
+        );
+
+        // Zpracování barevného textu
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"<span style=""color: ([^;]+);"">([^<]+)</span>",
+            "<span style=\"color: $1;\">$2</span>"
+        );
+
+        // Nahrazení řádků značkou <br/>
+        html = html.Replace("\n", "<br />");
+
+        return html;
+    }
+}

@@ -1,0 +1,657 @@
+﻿@using Cereboard.Shared.Models
+@using Cereboard.Components.Dialogs
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<style>
+    .task-detail-dialog {
+        height: 90vh;
+        width: 90vw;
+        max-width: 1200px;
+        overflow: hidden; /* Odstranění scrollbarů */
+    }
+    
+    .task-content-container {
+        display: flex;
+        height: calc(90vh - 130px);
+        overflow: hidden; /* Odstranění scrollbarů */
+    }
+    
+    .actions-sidebar {
+        width: 200px;
+        padding-right: 16px;
+        border-right: 1px solid var(--mud-palette-lines-default);
+        overflow-y: auto;
+    }
+    
+    .main-content {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding-left: 16px;
+    }
+    
+    .description-container {
+        min-height: 250px;
+        flex-grow: 0;
+        flex-shrink: 1;
+        overflow-y: auto;
+        margin-bottom: 16px;
+        width: 100%;
+        max-height: 50vh;
+    }
+    
+    .comments-container {
+        flex: 1;
+        overflow-y: auto;
+        width: 100%;
+    }
+    
+    .comment-item {
+        margin-bottom: 16px;
+        border-left: 3px solid var(--mud-palette-primary);
+        padding-left: 8px;
+    }
+    
+    .comment-reply {
+        margin-left: 32px;
+        margin-top: 8px;
+        border-left: 2px solid var(--mud-palette-secondary);
+        padding-left: 8px;
+    }
+    
+    .comment-reply .comment-reply {
+        margin-left: 24px; /* Menší odsazení pro hlubší úrovně */
+        border-left-color: var(--mud-palette-tertiary);
+    }
+    
+    .comment-header {
+        display: flex;
+        align-items: center;
+    }
+    
+    .comment-avatar {
+        margin-right: 8px;
+    }
+    
+    .markdown-area {
+        min-height: 100px;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 4px;
+        padding: 8px;
+        overflow-y: auto;
+    }
+    
+    .format-btn {
+        margin: 4px 0;
+    }
+    
+    .markdown-preview a {
+        color: var(--mud-palette-primary);
+        text-decoration: underline;
+    }
+    
+    .markdown-preview code {
+        background-color: var(--mud-palette-surface);
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+    }
+    
+    .markdown-preview pre {
+        background-color: var(--mud-palette-surface);
+        padding: 1em;
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+    
+    .markdown-preview h1 {
+        font-size: 1.8em;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+        font-weight: bold;
+    }
+    
+    .markdown-preview h2 {
+        font-size: 1.5em;
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+        font-weight: bold;
+    }
+    
+    .mud-input-control {
+        height: auto !important;
+    }
+    
+    .mud-input.mud-input-outlined .mud-input-slot {
+        height: auto !important;
+    }
+</style>
+
+<MudDialog FullWidth="true" MaxWidth="MaxWidth.ExtraLarge" Class="task-detail-dialog">
+    <TitleContent>
+        <div class="d-flex align-center w-100">
+            @if (editingTitle)
+            {
+                <MudTextField @bind-Value="task.Title" Immediate="true" Variant="Variant.Outlined" Class="flex-grow-1 mr-2" AutoFocus="true" 
+                              @onkeydown="@(e => { if(e.Key == "Enter") { editingTitle = false; } })" />
+                <MudIconButton Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" OnClick="@(() => editingTitle = false)" />
+            }
+            else
+            {
+                <MudText Typo="Typo.h5">@task.Title</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small" Class="ml-2" OnClick="@(() => editingTitle = true)" />
+            }
+        </div>
+    </TitleContent>
+    
+    <DialogContent>
+        <div class="pa-0 task-content-container">
+            <!-- Levý panel s nástroji -->
+            <div class="actions-sidebar pa-2">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Formátování</MudText>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("**", "**"))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.FormatBold" Class="mr-2" /> Tučný
+                </MudButton>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("*", "*"))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.FormatItalic" Class="mr-2" /> Kurzíva
+                </MudButton>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("~~", "~~"))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.FormatStrikethrough" Class="mr-2" /> Přeškrtnuté
+                </MudButton>
+                
+                <MudDivider Class="my-3" />
+                
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Seznamy</MudText>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("\n- ", ""))" FullWidth="true"
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.FormatListBulleted" Class="mr-2" /> Odrážky
+                </MudButton>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("\n1. ", ""))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.FormatListNumbered" Class="mr-2" /> Číslování
+                </MudButton>
+                
+                <MudDivider Class="my-3" />
+                
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Speciální</MudText>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("[", "](https://example.com)"))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.Link" Class="mr-2" /> Odkaz
+                </MudButton>
+                
+                <MudButton OnClick="@(() => InsertImage())" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.Image" Class="mr-2" /> Obrázek
+                </MudButton>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("```\n", "\n```"))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    <MudIcon Icon="@Icons.Material.Filled.Code" Class="mr-2" /> Kód
+                </MudButton>
+                
+                <MudDivider Class="my-3" />
+                
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Nadpisy</MudText>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("\n# ", ""))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    Nadpis 1
+                </MudButton>
+                
+                <MudButton OnClick="@(() => InsertMarkdownAsync("\n## ", ""))" FullWidth="true" 
+                           Variant="Variant.Outlined" Size="Size.Small" Class="format-btn">
+                    Nadpis 2
+                </MudButton>
+                
+                <MudDivider Class="my-3" />
+                
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Barvy</MudText>
+                
+                <div class="d-flex flex-wrap justify-space-between">
+                    @foreach (var color in colors)
+                    {
+                        <MudButton OnClick="@(() => InsertMarkdownAsync($"<span style=\"color: {color};\">", "</span>"))"
+                                 Style="@($"background-color: {color}; min-width: 32px; height: 32px; margin: 2px;")" />
+                    }
+                </div>
+            </div>
+            
+            <!-- Hlavní obsah -->
+            <div class="main-content">
+                <!-- Popis úkolu -->
+                <MudText Typo="Typo.h6" Class="mt-2">Popis</MudText>
+                
+                <div class="description-container">
+                    @if (editingDescription)
+                    {
+                        <MudTextField @bind-Value="task.Description" Lines="8" Variant="Variant.Outlined" 
+                                    Immediate="true" Class="w-100 description-editor" MinRows="8" MaxRows="20" 
+                                    @onfocus="@(() => activeEditor = "description")"
+                                    @ref="descriptionTextAreaRef" id="description-textarea"
+                                    @onkeydown="@(e => HandleKeyDownWithPreventDefault(e, "description"))" />
+                        
+                        <div class="d-flex justify-end mt-2">
+                            <MudButton Variant="Variant.Text" Color="Color.Default" 
+                                      OnClick="@(() => editingDescription = false)">Hotovo</MudButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="markdown-area markdown-preview" @onclick="@(() => { editingDescription = true; })">
+                            @((MarkupString)ConvertMarkdownToHtml(task.Description))
+                        </div>
+                    }
+                </div>
+                
+                <!-- Komentáře -->
+                <MudText Typo="Typo.h6" Class="mb-3">Komentáře</MudText>
+                
+                <div class="comments-container">
+                    <!-- Přidání nového komentáře -->
+                    <div class="d-flex mb-4">
+                        <MudAvatar Color="Color.Primary" Class="mr-3">A</MudAvatar>
+                        <div class="flex-grow-1">
+                            <MudTextField @bind-Value="newComment" Placeholder="Přidat komentář..."
+                                        Lines="3" Variant="Variant.Outlined" Class="mb-2"
+                                        @onfocus="@(() => activeEditor = "newComment")"
+                                        @ref="newCommentTextAreaRef" id="new-comment-textarea"
+                                        @onkeydown="@(e => HandleKeyDownWithPreventDefault(e, "newComment"))" />
+                            <div class="d-flex justify-end">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" 
+                                          OnClick="AddComment" Disabled="@(string.IsNullOrWhiteSpace(newComment))">
+                                    Přidat komentář
+                                </MudButton>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Seznam komentářů -->
+                    @foreach (var comment in comments.Where(c => c.ParentCommentId == null).OrderByDescending(c => c.CreatedAt))
+                    {
+                        <div class="comment-item">
+                            <CommentComponent Comment="comment" 
+                                             Comments="comments" 
+                                             EditingCommentId="editingCommentId" 
+                                             ReplyingToId="replyingToId" 
+                                             OnSetReplyingTo="SetReplyingTo" 
+                                             OnSetEditingComment="SetEditingComment" 
+                                             OnDeleteComment="DeleteComment" 
+                                             OnAddReply="AddReply" 
+                                             OnHandleKeyDown="HandleKeyDownWithPreventDefault" 
+                                             ActiveEditor="activeEditor" 
+                                             OnSetActiveEditor="SetActiveEditor" 
+                                             ReplyText="replyText" 
+                                             OnReplyTextChanged="UpdateReplyText" />
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </DialogContent>
+    
+    <DialogActions>
+        <MudButton OnClick="Cancel">Zavřít</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Uložit</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public TaskItem task { get; set; } = new();
+    
+    // Reference na text oblasti
+    private MudTextField<string>? descriptionTextAreaRef;
+    private MudTextField<string>? newCommentTextAreaRef;
+    private MudTextField<string>? replyTextAreaRef;
+    
+    // Stav pro editaci
+    private bool editingTitle = false;
+    private bool editingDescription = false;
+    private int? editingCommentId = null;
+    private int? replyingToId = null;
+    private string newComment = "";
+    private string replyText = "";
+    private string activeEditor = "";
+    private IJSObjectReference? _jsModule;
+    
+    // Barvy pro formátování textu
+    private string[] colors = new[] { "#f44336", "#e91e63", "#9c27b0", "#673ab7", "#3f51b5", 
+                                      "#2196f3", "#03a9f4", "#00bcd4", "#009688", "#4caf50", 
+                                      "#8bc34a", "#cddc39", "#ffeb3b", "#ffc107", "#ff9800", "#ff5722" };
+    
+    // Dummy data pro komentáře - v reálné aplikaci by byla načtena z API
+    private List<TaskComment> comments = new List<TaskComment>
+    {
+        new TaskComment { Id = 1, Text = "Toto je první komentář k úkolu.", CreatedAt = DateTime.Now.AddDays(-2) },
+        new TaskComment { Id = 2, Text = "Druhý komentář s **formátováním** a [odkazem](https://example.com).", CreatedAt = DateTime.Now.AddDays(-1) },
+        new TaskComment { Id = 3, Text = "Odpověď na první komentář s kódem: ```csharp\nvar x = 10;\n```", ParentCommentId = 1, CreatedAt = DateTime.Now.AddHours(-5) }
+    };
+    
+    // Model pro komentáře
+    public class TaskComment
+    {
+        public int Id { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public int? ParentCommentId { get; set; }
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Použijeme nový JS soubor
+                string version = DateTime.Now.Ticks.ToString();
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", $"./js/enterHandler.js?v={version}");
+                
+                // Nastavíme globální listenery pro Enter
+                await _jsModule.InvokeVoidAsync("setupEnterHandling");
+                
+                // Přidáme styl pro zachování výšky textových polí
+                await JS.InvokeVoidAsync("eval", @"
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        .mud-input.mud-input-outlined .mud-input-slot.mud-input-root-outlined {
+                            min-height: auto !important;
+                        }
+                        .description-editor .mud-input-slot.mud-input-root-outlined textarea {
+                            min-height: 250px !important;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                ");
+            }
+            catch (Exception ex)
+            {
+                await JS.InvokeVoidAsync("console.error", $"Chyba při inicializaci: {ex.Message}");
+            }
+        }
+    }
+    
+    // Metody pro zpracování komentářů
+    private void SetReplyingTo(int id)
+    {
+        replyingToId = id;
+        replyText = "";
+    }
+    
+    private void SetEditingComment(int? id)
+    {
+        editingCommentId = id;
+    }
+    
+    private void SetActiveEditor(string editorId)
+    {
+        activeEditor = editorId;
+    }
+    
+    private void UpdateReplyText(string text)
+    {
+        replyText = text;
+    }
+    
+    // Nová metoda pro zpracování klávesy Enter s možností zabránění výchozímu chování
+    private async Task HandleKeyDownWithPreventDefault(KeyboardEventArgs e, string editorId)
+    {
+        try
+        {
+            if (_jsModule == null) return;
+            
+            // Zpracováváme pouze Enter
+            if (e.Key == "Enter" && !e.ShiftKey)
+            {
+                string textAreaId;
+                
+                // Jednoduché mapování
+                if (editorId == "description")
+                    textAreaId = "description-textarea";
+                else if (editorId == "newComment")
+                    textAreaId = "new-comment-textarea";
+                else if (editorId == "reply")
+                    textAreaId = "reply-textarea";
+                else if (editorId.StartsWith("comment_"))
+                    textAreaId = $"comment-textarea-{editorId.Substring(8)}";
+                else
+                    return;
+                
+                // Zpracujeme seznam
+                bool handled = await _jsModule.InvokeAsync<bool>("processListItem", textAreaId);
+                
+                // Pokud bylo zpracování úspěšné, zabráníme výchozímu chování
+                if (handled)
+                {
+                    // Výchozí chování je zabráněno v JS kódu
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chyba při zpracování klávesy: {ex.Message}");
+        }
+    }
+    
+    // Metoda pro vložení obrázku
+    private async Task InsertImage()
+    {
+        try
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall };
+            var parameters = new DialogParameters();
+
+            var result = await DialogService.ShowAsync<ImageUrlDialog>("Vložit obrázek", parameters, options);
+            var dialogResult = await result.Result;
+            
+            if (!dialogResult.Canceled && dialogResult.Data is string imageUrl && !string.IsNullOrEmpty(imageUrl))
+            {
+                // Vložíme markdown pro obrázek
+                await InsertMarkdownAsync($"![Obrázek]({imageUrl})", "");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chyba při vkládání obrázku: {ex.Message}");
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule is not null)
+        {
+            await _jsModule.DisposeAsync();
+        }
+    }
+    
+    // Metody pro práci s dialogem
+    private void Submit() => MudDialog.Close(DialogResult.Ok(task));
+    private void Cancel() => MudDialog.Cancel();
+    
+    // Metody pro práci s komentáři
+    private void AddComment()
+    {
+        if (string.IsNullOrWhiteSpace(newComment)) return;
+        
+        var comment = new TaskComment 
+        { 
+            Id = comments.Any() ? comments.Max(c => c.Id) + 1 : 1,
+            Text = newComment,
+            CreatedAt = DateTime.Now
+        };
+        
+        comments.Add(comment);
+        newComment = "";
+    }
+    
+    private void AddReply(int parentId, string replyText)
+    {
+        if (string.IsNullOrWhiteSpace(replyText)) return;
+        
+        var reply = new TaskComment 
+        { 
+            Id = comments.Any() ? comments.Max(c => c.Id) + 1 : 1,
+            Text = replyText,
+            ParentCommentId = parentId,
+            CreatedAt = DateTime.Now
+        };
+        
+        comments.Add(reply);
+        this.replyText = "";
+        replyingToId = null;
+    }
+    
+    private void DeleteComment(int id)
+    {
+        // Odstranění komentáře a jeho odpovědí (rekurzivně)
+        DeleteCommentRecursive(id);
+    }
+    
+    private void DeleteCommentRecursive(int commentId)
+    {
+        // Najdeme všechny odpovědi
+        var replies = comments.Where(c => c.ParentCommentId == commentId).ToList();
+        
+        // Rekurzivně odstraníme všechny odpovědi
+        foreach (var reply in replies)
+        {
+            DeleteCommentRecursive(reply.Id);
+        }
+        
+        // Odstraníme samotný komentář
+        var comment = comments.FirstOrDefault(c => c.Id == commentId);
+        if (comment != null)
+        {
+            comments.Remove(comment);
+        }
+    }
+    
+    // Metody pro práci s Markdown
+    private async Task InsertMarkdownAsync(string startTag, string endTag)
+    {
+        try
+        {
+            if (_jsModule == null) return;
+            
+            string textAreaId;
+            
+            // Jednoduché mapování bez složité metody
+            if (activeEditor == "description")
+                textAreaId = "description-textarea";
+            else if (activeEditor == "newComment")
+                textAreaId = "new-comment-textarea";
+            else if (activeEditor == "reply")
+                textAreaId = "reply-textarea";
+            else if (activeEditor.StartsWith("comment_"))
+                textAreaId = $"comment-textarea-{activeEditor.Substring(8)}";
+            else if (editingDescription)
+                textAreaId = "description-textarea";
+            else
+                textAreaId = "new-comment-textarea";
+            
+            // Volání JS funkce pro vložení textu
+            await _jsModule.InvokeVoidAsync("insertTextAtCursor", textAreaId, startTag, endTag);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Chyba při vkládání formátování: {ex.Message}");
+        }
+    }
+    
+    private string ConvertMarkdownToHtml(string markdown)
+    {
+        // Toto je zjednodušená implementace, v reálné aplikaci byste použili Markdown parser
+        if (string.IsNullOrWhiteSpace(markdown)) return "<i>Žádný obsah</i>";
+        
+        var html = markdown;
+        
+        // Zpracování nadpisů
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"^# (.+)$", 
+            "<h1>$1</h1>",
+            System.Text.RegularExpressions.RegexOptions.Multiline
+        );
+        
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"^## (.+)$", 
+            "<h2>$1</h2>",
+            System.Text.RegularExpressions.RegexOptions.Multiline
+        );
+        
+        // Tučný text - musí být páry ** **
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"\*\*([^*]+)\*\*", 
+            "<strong>$1</strong>"
+        );
+        
+        // Kurzíva - musí být páry * *
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"\*([^*]+)\*", 
+            "<em>$1</em>"
+        );
+        
+        // Přeškrtnutí - musí být páry ~~ ~~
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"\~\~([^~]+)\~\~", 
+            "<s>$1</s>"
+        );
+        
+        // Odkazy
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"\[([^\]]+)\]\(([^)]+)\)", 
+            "<a href=\"$2\" target=\"_blank\">$1</a>"
+        );
+        
+        // Obrázky
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"!\[([^\]]*)\]\(([^)]+)\)", 
+            "<img src=\"$2\" alt=\"$1\" style=\"max-width:100%;\">"
+        );
+        
+        // Kódové bloky
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"```(.*?)\n([\s\S]*?)```", 
+            "<pre><code class=\"language-$1\">$2</code></pre>",
+            System.Text.RegularExpressions.RegexOptions.Singleline
+        );
+        
+        // Inline kód
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html, 
+            @"`([^`]+)`", 
+            "<code>$1</code>"
+        );
+        
+        // Zpracování barevného textu
+        html = System.Text.RegularExpressions.Regex.Replace(
+            html,
+            @"<span style=""color: ([^;]+);"">([^<]+)</span>",
+            "<span style=\"color: $1;\">$2</span>"
+        );
+        
+        // Nahrazení řádků značkou <br/>
+        html = html.Replace("\n", "<br />");
+        
+        return html;
+    }
+    
+    [Inject] IDialogService DialogService { get; set; } = default!;
+}

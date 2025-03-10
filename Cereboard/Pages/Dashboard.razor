@@ -2,6 +2,7 @@
 @using Cereboard.Shared.Models
 @inject HttpClient Http
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 
 <MudText Typo="Typo.h3" Class="mb-4">Moje nástěnky</MudText>
 
@@ -76,6 +77,7 @@ else
             }
             </MudItem>
         </MudGrid>
+        
 }
 
 @code {
