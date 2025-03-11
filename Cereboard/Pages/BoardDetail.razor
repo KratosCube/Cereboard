@@ -11,111 +11,113 @@
 
 @if (board == null)
 {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
 }
 else if (board.Columns != null)
 {
-        <div class="d-flex gap-4 overflow-auto py-4" @ondrop="OnColumnDrop" @ondragover:preventDefault id="columnContainer">
+                <div class="d-flex gap-4 overflow-auto py-4 align-items-start" @ondrop="OnColumnDrop" @ondragover:preventDefault id="columnContainer">
         @foreach (var column in board.Columns.OrderBy(c => c.Order))
         {
-                    <div class="kanban-column" style="min-width: 300px; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;"
-                         @key="column.Id"
-                         id="column-@column.Id">
+                                            <div class="kanban-column" 
+                             style="min-width: 300px; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;"
+                             @key="column.Id"
+                             id="column-@column.Id">
 
-                        <!-- Column header - this should be draggable -->
-                        <div class="column-header d-flex justify-space-between align-center pa-3" 
-                             style="background-color: @column.Color; cursor: move; width: 100%;"
-                             id="column-header-@column.Id"
-                             draggable="true"
-                             @ondragstart="@(e => OnColumnDragStart(e, column))"
-                             @ondragend="OnDragEnd">
-                            <div class="d-flex align-center">
-                                <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Class="mr-2 mud-text-secondary" />
-                                <MudText Typo="Typo.h6" Style="font-weight: 500;">@column.Name</MudText>
-                            </div>
-                            <div>
-                                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                                             Size="Size.Small" 
-                                             OnClick="@(() => EditColumn(column))" />
-                            </div>
-                        </div>
+                                        <!-- Column header - this should be draggable -->
+                                               <div class="column-header d-flex justify-space-between align-center pa-3" 
+                                 style="background-color: @column.Color; cursor: move; width: 100%;"
+                                 id="column-header-@column.Id"
+                                 draggable="true"
+                                 @ondragstart="@(e => OnColumnDragStart(e, column))"
+                                 @ondragend="OnDragEnd">
+                                            <div class="d-flex align-center">
+                                                <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Class="mr-2 mud-text-secondary" />
+                                                <MudText Typo="Typo.h6" Style="font-weight: 500;">@column.Name</MudText>
+                                            </div>
+                                            <div>
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                                             Size="Size.Small" 
+                                                             OnClick="@(() => EditColumn(column))" />
+                                            </div>
+                                        </div>
 
-                        <!-- Column content for tasks -->
-                                <div class="column-content pa-3" style="background-color: @GetLighterColor(column.Color); min-height: 300px; width: 100%;"
-             @ondragenter="@(e => OnColumnDragEnter(e, column))"
+                                        <!-- Column content for tasks - Modified to use adaptive height -->
+                                                 <div class="column-content pa-3" 
+                                 style="background-color: @GetLighterColor(column.Color); width: 100%;"
+                                 @ondragenter="@(e => OnColumnDragEnter(e, column))"
                 @ondragover:preventDefault
-             @ondrop="@(e => OnTaskDrop(e, column))"
-             id="column-content-@column.Id">
+                                 @ondrop="@(e => OnTaskDrop(e, column))"
+                                 id="column-content-@column.Id">
 
-                            <!-- Tasks go here -->
+                                            <!-- Tasks go here -->
                     @foreach (var task in column.Tasks.OrderBy(t => t.Order))
                     {
-                                    <div class="task-card mb-3"
-                                         id="task-@task.Id"
-                                         draggable="true"
-                                         @ondragstart="@(e => OnTaskDragStart(e, task))"
-                                         @ondragend="OnDragEnd"
-                                         @onclick="@(() => OpenTaskDetail(task))">
-                                        <MudText Typo="Typo.h6">@task.Title</MudText>
-                                        <MudText Typo="Typo.body2">@task.Description</MudText>
+                                                            <div class="task-card mb-3"
+                                                                 id="task-@task.Id"
+                                                                 draggable="true"
+                                                                 @ondragstart="@(e => OnTaskDragStart(e, task))"
+                                                                 @ondragend="OnDragEnd"
+                                                                 @onclick="@(() => OpenTaskDetail(task))">
+                                                                <MudText Typo="Typo.h6">@task.Title</MudText>
+                                                                <MudText Typo="Typo.body2">@task.Description</MudText>
                             @if (task.DueDate.HasValue)
                             {
-                                                <MudText Class="mt-2" Typo="Typo.caption">
-                                                    Termín: @task.DueDate.Value.ToShortDateString()
-                                                </MudText>
+                                                                                <MudText Class="mt-2" Typo="Typo.caption">
+                                                                                    Termín: @task.DueDate.Value.ToShortDateString()
+                                                                                </MudText>
                             }
-                                    </div>
+                                                            </div>
                     }
 
-                            <!-- Add task button or form -->
+                                            <!-- Add task button or form -->
                     @if (showNewTaskInput && newTaskColumnId == column.Id)
                     {
-                                    <div class="pa-2 mt-3 d-flex flex-column gap-2">
-                                        <MudTextField @bind-Value="newTaskTitle" Label="Název úkolu" Variant="Variant.Outlined" Immediate="true" />
-                                        <div class="d-flex gap-2">
-                                            <MudButton Color="Color.Primary" OnClick="SaveNewTask">Přidat</MudButton>
-                                            <MudButton Color="Color.Default" OnClick="CancelNewTask">Zrušit</MudButton>
-                                        </div>
-                                    </div>
+                                                            <div class="pa-2 mt-3 d-flex flex-column gap-2">
+                                                                <MudTextField @bind-Value="newTaskTitle" Label="Název úkolu" Variant="Variant.Outlined" Immediate="true" />
+                                                                <div class="d-flex gap-2">
+                                                                    <MudButton Color="Color.Primary" OnClick="SaveNewTask">Přidat</MudButton>
+                                                                    <MudButton Color="Color.Default" OnClick="CancelNewTask">Zrušit</MudButton>
+                                                                </div>
+                                                            </div>
                     }
                     else
                     {
-                                    <MudButton FullWidth="true"
-                                             StartIcon="@Icons.Material.Filled.Add"
-                                             Color="Color.Primary"
-                                             Variant="Variant.Text"
-                                             OnClick="@(() => ShowNewTaskInput(column.Id))"
-                                             Class="mt-3">
-                                        Přidat úkol
-                                    </MudButton>
+                                                            <MudButton FullWidth="true"
+                                                                     StartIcon="@Icons.Material.Filled.Add"
+                                                                     Color="Color.Primary"
+                                                                     Variant="Variant.Text"
+                                                                     OnClick="@(() => ShowNewTaskInput(column.Id))"
+                                                                     Class="mt-3">
+                                                                Přidat úkol
+                                                            </MudButton>
                     }
-                        </div>
-                    </div>
+                                        </div>
+                                    </div>
         }
 
-            <!-- Add column button and new column form -->
+                    <!-- Add column button and new column form -->
         @if (showNewColumnInput)
         {
-                    <div class="pa-4" style="min-width: 300px; background-color: white; border-radius: 8px;">
-                        <div class="d-flex flex-column gap-2">
-                            <MudTextField @bind-Value="newColumnName" Label="Název sloupce" Variant="Variant.Outlined" Immediate="true" />
-                            <div class="d-flex gap-2">
-                                <MudButton Color="Color.Primary" OnClick="SaveNewColumn">Přidat</MudButton>
-                                <MudButton Color="Color.Default" OnClick="CancelNewColumn">Zrušit</MudButton>
-                            </div>
-                        </div>
-                    </div>
+                                    <div class="pa-4" style="min-width: 300px; background-color: white; border-radius: 8px;">
+                                        <div class="d-flex flex-column gap-2">
+                                            <MudTextField @bind-Value="newColumnName" Label="Název sloupce" Variant="Variant.Outlined" Immediate="true" />
+                                            <div class="d-flex gap-2">
+                                                <MudButton Color="Color.Primary" OnClick="SaveNewColumn">Přidat</MudButton>
+                                                <MudButton Color="Color.Default" OnClick="CancelNewColumn">Zrušit</MudButton>
+                                            </div>
+                                        </div>
+                                    </div>
         }
 
-            <div style="min-width: 100px;" class="d-flex align-center justify-center">
-                <MudButton Variant="Variant.Outlined"
-                         StartIcon="@Icons.Material.Filled.Add"
-                         Color="Color.Default"
-                         OnClick="ShowNewColumnInput">
-                    Přidat sloupec
-                </MudButton>
-            </div>
-        </div>
+                    <div style="min-width: 100px;" class="d-flex align-center justify-center">
+                        <MudButton Variant="Variant.Outlined"
+                                 StartIcon="@Icons.Material.Filled.Add"
+                                 Color="Color.Default"
+                                 OnClick="ShowNewColumnInput">
+                            Přidat sloupec
+                        </MudButton>
+                    </div>
+                </div>
 }
 
 @code {
@@ -142,8 +144,6 @@ else if (board.Columns != null)
         await LoadBoardData();
     }
 
-
-
     private async Task LogDragStart(string type, int id)
     {
         await JS.InvokeVoidAsync("console.log", $"==== DRAG START: {type} ID: {id} ====");
@@ -162,7 +162,6 @@ else if (board.Columns != null)
         await JS.InvokeVoidAsync("console.log", $"Current state: dragTaskId={dragTaskId}, dragSourceColumnId={dragSourceColumnId}, isDraggingColumn={isDraggingColumn}");
     }
 
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
@@ -179,6 +178,9 @@ else if (board.Columns != null)
                 if (dragDropModule != null)
                 {
                     await dragDropModule.InvokeVoidAsync("setupDraggableElements");
+
+                    // Add this new function to dragdrop.js to ensure column heights adjust properly
+                    await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
                 }
 
                 Console.WriteLine("Drag and drop initialized");
@@ -202,6 +204,7 @@ else if (board.Columns != null)
             catch { }
         }
     }
+
     private async Task ResetDragState()
     {
         // Reset all state variables
@@ -221,6 +224,7 @@ else if (board.Columns != null)
         // Log the reset
         await JS.InvokeVoidAsync("console.log", "Drag state reset, column headers should be draggable now");
     }
+
     private async Task LoadBoardData()
     {
         try
@@ -232,6 +236,7 @@ else if (board.Columns != null)
             await JS.InvokeVoidAsync("console.error", ex.Message);
         }
     }
+
     private async Task OnDragEnd()
     {
         try
@@ -242,6 +247,9 @@ else if (board.Columns != null)
             {
                 await dragDropModule.InvokeVoidAsync("clearDragData");
                 await dragDropModule.InvokeVoidAsync("clearDragEffects");
+
+                // Adjust column heights after drag operations
+                await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
             }
 
             // Reset state variables
@@ -258,6 +266,7 @@ else if (board.Columns != null)
             await JS.InvokeVoidAsync("console.error", "Error in drag end:", ex.Message);
         }
     }
+
     // Helper method to get a lighter shade of the column color
     private string GetLighterColor(string hexColor)
     {
@@ -304,6 +313,7 @@ else if (board.Columns != null)
             await JS.InvokeVoidAsync("console.error", "Error in column drag start:", ex.Message);
         }
     }
+
     private void PreventColumnDrag(PointerEventArgs args, string selector)
     {
         // Use JS to make elements temporarily non-draggable when clicking on tasks
@@ -314,6 +324,7 @@ else if (board.Columns != null)
         }});
     ");
     }
+
     private async Task OnColumnDragEnter(DragEventArgs args, Column column)
     {
         try
@@ -324,9 +335,15 @@ else if (board.Columns != null)
 
                 if (dragType == "column")
                 {
+                    // Get source column ID
+                    int sourceId = await dragDropModule.InvokeAsync<int>("getDragData", "columnId");
+
                     // Store target column ID in JS
                     await dragDropModule.InvokeVoidAsync("setDragData", "targetColumnId", column.Id);
                     await dragDropModule.InvokeVoidAsync("highlightColumnTarget", column.Id);
+
+                    // Add this line to animate column shift
+                    await dragDropModule.InvokeVoidAsync("animateColumnShift", sourceId, column.Id);
 
                     // Set state for Blazor
                     dragEnterColumnId = column.Id;
@@ -360,6 +377,18 @@ else if (board.Columns != null)
             // Get column IDs with extra validation
             int sourceId = await dragDropModule.InvokeAsync<int>("getDragData", "columnId");
             int targetId = await dragDropModule.InvokeAsync<int>("getDragData", "targetColumnId");
+
+            // Check if returning to original position
+            bool returningToOriginal = await dragDropModule.InvokeAsync<bool>("isReturningToOriginalPosition");
+            if (returningToOriginal)
+            {
+                Console.WriteLine("Column returned to original position - canceling reordering");
+                // Just clean up and return without reordering
+                await dragDropModule.InvokeVoidAsync("clearDragData");
+                await dragDropModule.InvokeVoidAsync("clearDragEffects");
+                StateHasChanged();
+                return;
+            }
 
             Console.WriteLine($"OnColumnDrop: sourceId={sourceId}, targetId={targetId}");
 
@@ -414,6 +443,9 @@ else if (board.Columns != null)
 
             // Update UI
             StateHasChanged();
+
+            // Adjust column heights after reordering
+            await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
         }
         catch (Exception ex)
         {
@@ -519,6 +551,12 @@ else if (board.Columns != null)
 
             // Update UI
             await InvokeAsync(() => StateHasChanged());
+
+            // Adjust column heights after moving tasks
+            if (dragDropModule != null)
+            {
+                await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
+            }
         }
         catch (Exception ex)
         {
@@ -558,11 +596,47 @@ else if (board.Columns != null)
 
             if (!result.Canceled)
             {
-                if (result.Data is string && (string)result.Data == "delete")
+                // Update the task with the result from the dialog
+                if (result.Data is TaskItem updatedTask)
+                {
+                    // Find and update the task
+                    var column = board?.Columns.FirstOrDefault(c => c.Id == task.ColumnId);
+                    if (column != null)
+                    {
+                        var existingTask = column.Tasks.FirstOrDefault(t => t.Id == task.Id);
+                        if (existingTask != null)
+                        {
+                            // Update task properties
+                            existingTask.Title = updatedTask.Title;
+                            existingTask.Description = updatedTask.Description;
+                            existingTask.DueDate = updatedTask.DueDate;
+                            existingTask.Priority = updatedTask.Priority;
+
+                            // Refresh the UI
+                            StateHasChanged();
+
+                            // Adjust column heights after task update
+                            if (dragDropModule != null)
+                            {
+                                await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
+                            }
+                        }
+                    }
+                }
+                else if (result.Data is string && (string)result.Data == "delete")
                 {
                     // Delete task
                     var column = board?.Columns.FirstOrDefault(c => c.Id == task.ColumnId);
                     column?.Tasks.Remove(task);
+
+                    // Refresh UI
+                    StateHasChanged();
+
+                    // Adjust column heights after task deletion
+                    if (dragDropModule != null)
+                    {
+                        await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
+                    }
                 }
             }
         }
@@ -571,6 +645,7 @@ else if (board.Columns != null)
             await JS.InvokeVoidAsync("console.error", "Chyba při otevírání dialogu:", ex.Message);
         }
     }
+
     [JSInvokable]
     public static async Task<bool> MoveTaskJS(int taskId, int sourceColumnId, int targetColumnId)
     {
@@ -582,6 +657,7 @@ else if (board.Columns != null)
 
         return true;
     }
+
     private void ShowNewTaskInput(int columnId)
     {
         showNewTaskInput = true;
@@ -589,7 +665,7 @@ else if (board.Columns != null)
         newTaskTitle = "";
     }
 
-    private void SaveNewTask()
+    private async Task SaveNewTask()
     {
         if (string.IsNullOrWhiteSpace(newTaskTitle) || board == null) return;
 
@@ -621,6 +697,15 @@ else if (board.Columns != null)
             showNewTaskInput = false;
             newTaskColumnId = 0;
             newTaskTitle = "";
+
+            // Refresh UI
+            StateHasChanged();
+
+            // Adjust column heights after adding task
+            if (dragDropModule != null)
+            {
+                await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
+            }
         }
     }
 
@@ -637,7 +722,7 @@ else if (board.Columns != null)
         newColumnName = "";
     }
 
-    private void SaveNewColumn()
+    private async Task SaveNewColumn()
     {
         if (string.IsNullOrWhiteSpace(newColumnName) || board == null) return;
 
@@ -658,6 +743,15 @@ else if (board.Columns != null)
 
         showNewColumnInput = false;
         newColumnName = "";
+
+        // Refresh UI
+        StateHasChanged();
+
+        // Adjust column heights after adding new column
+        if (dragDropModule != null)
+        {
+            await dragDropModule.InvokeVoidAsync("adjustColumnHeights");
+        }
     }
 
     private void CancelNewColumn()
