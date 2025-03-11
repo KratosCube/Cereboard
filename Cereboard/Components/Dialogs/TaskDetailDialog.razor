@@ -396,7 +396,10 @@
                 await JS.InvokeVoidAsync("console.log", "Initial task description:",
                     task.Description.Length > 100 ? task.Description.Substring(0, 100) + "..." : task.Description);
 
-                // Process any existing large images in the description
+                // First, check for image placeholders and restore from localStorage
+                await RestoreImagesFromLocalStorage();
+
+                // Process any large images for the current session
                 await ProcessImagesInDescription();
 
                 // Initialize the preview
@@ -415,7 +418,53 @@
 
         await base.OnInitializedAsync();
     }
+    private async Task RestoreImagesFromLocalStorage()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(task.Description)) return;
 
+            // Find image placeholders in the description
+            var placeholderMatches = System.Text.RegularExpressions.Regex.Matches(
+                task.Description,
+                @"!\[([^\]]*)\]\(IMG:([a-z0-9_-]+)\)"
+            );
+
+            if (placeholderMatches.Count > 0)
+            {
+                await JS.InvokeVoidAsync("console.log", $"Found {placeholderMatches.Count} image placeholders to restore from localStorage");
+
+                // Check each placeholder for localStorage data
+                foreach (System.Text.RegularExpressions.Match match in placeholderMatches)
+                {
+                    string placeholderId = match.Groups[2].Value;
+
+                    // Try to get the image data from localStorage
+                    if (_imageModule != null)
+                    {
+                        try
+                        {
+                            string imageData = await _imageModule.InvokeAsync<string>("getImageData", placeholderId);
+                            if (!string.IsNullOrEmpty(imageData))
+                            {
+                                // If found in localStorage, add to our in-memory cache for this session
+                                imageDataCache[placeholderId] = imageData;
+                                await JS.InvokeVoidAsync("console.log", $"Restored image {placeholderId} from localStorage");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            await JS.InvokeVoidAsync("console.error", $"Error retrieving image {placeholderId} from localStorage: {ex.Message}");
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error restoring images from localStorage: {ex.Message}");
+        }
+    }
     private async Task ProcessImagesInDescription()
     {
         try
@@ -430,7 +479,7 @@
 
             if (matches.Count > 0)
             {
-                await JS.InvokeVoidAsync("console.log", $"Found {matches.Count} images to process");
+                await JS.InvokeVoidAsync("console.log", $"Found {matches.Count} inline images to process");
 
                 // Create a copy of the description to work with
                 string processedDescription = task.Description;
@@ -448,9 +497,15 @@
                         string placeholderId = $"img_{++imageCounter}";
                         string placeholderUrl = $"IMG:{placeholderId}";
 
-                        // Store the actual data
+                        // Store the actual data in both memory cache and localStorage
                         imageDataCache[placeholderId] = imageData;
-                        await JS.InvokeVoidAsync("console.log", $"Stored image {placeholderId} in cache");
+
+                        if (_imageModule != null)
+                        {
+                            await _imageModule.InvokeVoidAsync("storeImageData", placeholderId, imageData);
+                        }
+
+                        await JS.InvokeVoidAsync("console.log", $"Processed inline image to {placeholderId} and stored in localStorage");
 
                         // Replace the large URL with the placeholder
                         string originalText = match.Value;
@@ -521,7 +576,59 @@
     {
         try
         {
-            htmlPreview = await ConvertMarkdownToHtmlAsync(task.Description);
+            if (string.IsNullOrWhiteSpace(task.Description))
+            {
+                htmlPreview = "<i>Žádný obsah</i>";
+                return;
+            }
+
+            // First, find and process all image placeholders
+            var placeholderMatches = System.Text.RegularExpressions.Regex.Matches(
+                task.Description,
+                @"!\[([^\]]*)\]\(IMG:([a-z0-9_-]+)\)"
+            );
+
+            string processedMarkdown = task.Description;
+
+            foreach (System.Text.RegularExpressions.Match match in placeholderMatches)
+            {
+                string altText = match.Groups[1].Value;
+                string placeholderId = match.Groups[2].Value;
+
+                // Try memory cache first
+                string imageData = null;
+                imageDataCache.TryGetValue(placeholderId, out imageData);
+
+                // If not in memory, try localStorage
+                if (string.IsNullOrEmpty(imageData) && _imageModule != null)
+                {
+                    imageData = await _imageModule.InvokeAsync<string>("getImageData", placeholderId);
+
+                    // If found in localStorage, cache it in memory too
+                    if (!string.IsNullOrEmpty(imageData))
+                    {
+                        imageDataCache[placeholderId] = imageData;
+                    }
+                }
+
+                // Replace placeholder with either the image or a placeholder div
+                string replacementHtml;
+                if (!string.IsNullOrEmpty(imageData))
+                {
+                    replacementHtml = $"<img src=\"{imageData}\" alt=\"{altText}\" style=\"max-width:100%; border-radius:4px; display:block; margin:8px 0;\">";
+                }
+                else
+                {
+                    replacementHtml = $"<div class=\"image-placeholder\">Obrázek nenalezen</div>";
+                }
+
+                // Replace this placeholder in the markdown with HTML directly
+                // This is a hack to get inline HTML into the markdown before conversion
+                processedMarkdown = processedMarkdown.Replace(match.Value, replacementHtml);
+            }
+
+            // Now convert the rest of the markdown
+            htmlPreview = await ConvertMarkdownToHtmlAsync(processedMarkdown);
             StateHasChanged();
         }
         catch (Exception ex)
@@ -540,25 +647,70 @@
         {
             var html = markdown;
 
-            // Handle image placeholders first - IMG:{id} format
-            html = System.Text.RegularExpressions.Regex.Replace(
+            // First, handle image placeholders - IMG:{id} format
+            // We need to do this with a loop rather than Regex.Replace with async lambda
+            var placeholderMatches = System.Text.RegularExpressions.Regex.Matches(
                 html,
-                @"!\[([^\]]*)\]\(IMG:([a-z0-9_-]+)\)",
-                match =>
+                @"!\[([^\]]*)\]\(IMG:([a-z0-9_-]+)\)"
+            );
+
+            // Process each placeholder synchronously after gathering data
+            if (placeholderMatches.Count > 0)
+            {
+                // Create a list of replacements to make
+                var replacements = new List<(string Original, string Replacement)>();
+
+                foreach (System.Text.RegularExpressions.Match match in placeholderMatches)
                 {
                     var alt = match.Groups[1].Value;
                     var placeholderId = match.Groups[2].Value;
+                    string imageData = null;
 
-                    // Try to get image data from cache
-                    if (imageDataCache.TryGetValue(placeholderId, out var imageData))
+                    // First try to get image data from in-memory cache
+                    if (imageDataCache.TryGetValue(placeholderId, out var cachedData))
                     {
-                        return $"<img src=\"{imageData}\" alt=\"{alt}\" style=\"max-width:100%; border-radius:4px; display:block; margin:8px 0;\">";
+                        imageData = cachedData;
+                    }
+                    // If not in memory, try localStorage via JavaScript
+                    else if (_imageModule != null)
+                    {
+                        try
+                        {
+                            string localStorageImage = await _imageModule.InvokeAsync<string>("getImageData", placeholderId);
+                            if (!string.IsNullOrEmpty(localStorageImage))
+                            {
+                                // Store in memory cache for future use
+                                imageDataCache[placeholderId] = localStorageImage;
+                                imageData = localStorageImage;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            await JS.InvokeVoidAsync("console.error", $"Error retrieving image from localStorage: {ex.Message}");
+                        }
                     }
 
-                    // Fallback if image not found
-                    return $"<div class=\"image-placeholder\">Obrázek</div>";
+                    // Create HTML for image or placeholder
+                    string replacementHtml;
+                    if (!string.IsNullOrEmpty(imageData))
+                    {
+                        replacementHtml = $"<img src=\"{imageData}\" alt=\"{alt}\" style=\"max-width:100%; border-radius:4px; display:block; margin:8px 0;\">";
+                    }
+                    else
+                    {
+                        replacementHtml = $"<div class=\"image-placeholder\">Obrázek nenalezen</div>";
+                    }
+
+                    // Add to our replacements list
+                    replacements.Add((match.Value, replacementHtml));
                 }
-            );
+
+                // Now apply all replacements to the HTML
+                foreach (var (original, replacement) in replacements)
+                {
+                    html = html.Replace(original, replacement);
+                }
+            }
 
             // Process any data URLs directly in the markdown
             html = System.Text.RegularExpressions.Regex.Replace(
@@ -580,7 +732,7 @@
                 "<img src=\"$2\" alt=\"$1\" style=\"max-width:100%; border-radius:4px; display:block; margin:8px 0;\">"
             );
 
-            // Zpracování nadpisů
+            // Process headings
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"^# (.+)$",
@@ -595,35 +747,35 @@
                 System.Text.RegularExpressions.RegexOptions.Multiline
             );
 
-            // Tučný text - musí být páry ** **
+            // Bold text - must be pairs ** **
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"\*\*([^*]+)\*\*",
                 "<strong>$1</strong>"
             );
 
-            // Kurzíva - musí být páry * *
+            // Italic text - must be pairs * *
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"\*([^*]+)\*",
                 "<em>$1</em>"
             );
 
-            // Přeškrtnutí - musí být páry ~~ ~~
+            // Strikethrough - must be pairs ~~ ~~
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"\~\~([^~]+)\~\~",
                 "<s>$1</s>"
             );
 
-            // Odkazy
+            // Links
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"\[([^\]]+)\]\(([^)]+)\)",
                 "<a href=\"$2\" target=\"_blank\">$1</a>"
             );
 
-            // Kódové bloky
+            // Code blocks
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"```(.*?)\n([\s\S]*?)```",
@@ -631,21 +783,21 @@
                 System.Text.RegularExpressions.RegexOptions.Singleline
             );
 
-            // Inline kód
+            // Inline code
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"`([^`]+)`",
                 "<code>$1</code>"
             );
 
-            // Zpracování barevného textu
+            // Colored text
             html = System.Text.RegularExpressions.Regex.Replace(
                 html,
                 @"<span style=""color: ([^;]+);"">([^<]+)</span>",
                 "<span style=\"color: $1;\">$2</span>"
             );
 
-            // Nahrazení řádků značkou <br/>
+            // Replace newlines with <br/>
             html = html.Replace("\n", "<br />");
 
             return html;
@@ -695,9 +847,22 @@
                     string placeholderId = $"img_{++imageCounter}";
                     string placeholderUrl = $"IMG:{placeholderId}";
 
-                    // Store the actual data
+                    // Store the actual data in memory
                     imageDataCache[placeholderId] = imageUrl;
-                    await JS.InvokeVoidAsync("console.log", $"Storing image in cache: {placeholderId}");
+
+                    // Also store in localStorage for persistence between sessions
+                    if (_imageModule != null)
+                    {
+                        try
+                        {
+                            await _imageModule.InvokeVoidAsync("storeImageData", placeholderId, imageUrl);
+                            await JS.InvokeVoidAsync("console.log", $"Stored image in localStorage: {placeholderId}");
+                        }
+                        catch (Exception ex)
+                        {
+                            await JS.InvokeVoidAsync("console.error", $"Error storing image in localStorage: {ex.Message}");
+                        }
+                    }
 
                     // Use the placeholder in the markdown
                     markdownImage = $"![Obrázek]({placeholderUrl})";
