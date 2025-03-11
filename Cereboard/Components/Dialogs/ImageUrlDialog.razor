@@ -66,17 +66,17 @@
             </div>
 
             <MudTextField @bind-Value="ImageUrl" 
-                         Label="URL obrázku z internetu" 
-                         Placeholder="https://example.com/image.jpg"
-                         Immediate="true"
-                         FullWidth="true" />
+                        Label="URL obrázku z internetu" 
+                        Placeholder="https://example.com/image.jpg"
+                        Immediate="true"
+                        FullWidth="true" />
         </div>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Zrušit</MudButton>
         <MudButton Color="Color.Primary" 
-                 OnClick="Submit" 
-                 Disabled="@(string.IsNullOrEmpty(ImageUrl) && string.IsNullOrEmpty(previewImageData))">
+                OnClick="Submit" 
+                Disabled="@(string.IsNullOrEmpty(ImageUrl) && string.IsNullOrEmpty(previewImageData))">
             Vložit
         </MudButton>
     </DialogActions>
@@ -88,6 +88,51 @@
     public string ImageUrl { get; set; } = "";
     private string previewImageData = "";
     private const int MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+    private ElementReference fileInputReference;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Add drag-and-drop support
+            await JS.InvokeVoidAsync("eval", @"
+                const uploadContainer = document.querySelector('.upload-container');
+                if (uploadContainer) {
+                    uploadContainer.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        uploadContainer.style.borderColor = 'var(--mud-palette-primary)';
+                        uploadContainer.style.backgroundColor = 'rgba(var(--mud-palette-primary-rgb), 0.1)';
+                    });
+
+                    uploadContainer.addEventListener('dragleave', (e) => {
+                        e.preventDefault();
+                        uploadContainer.style.borderColor = 'var(--mud-palette-lines-default)';
+                        uploadContainer.style.backgroundColor = '';
+                    });
+
+                    uploadContainer.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        uploadContainer.style.borderColor = 'var(--mud-palette-lines-default)';
+                        uploadContainer.style.backgroundColor = '';
+
+                        if (e.dataTransfer.files.length) {
+                            const fileInput = document.getElementById('fileInput');
+                            if (fileInput) {
+                                // Create a DataTransfer object and add the file
+                                const dataTransfer = new DataTransfer();
+                                dataTransfer.items.add(e.dataTransfer.files[0]);
+                                fileInput.files = dataTransfer.files;
+
+                                // Trigger change event
+                                const event = new Event('change', { bubbles: true });
+                                fileInput.dispatchEvent(event);
+                            }
+                        }
+                    });
+                }
+            ");
+        }
+    }
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
@@ -133,8 +178,16 @@
 
     private async Task BrowseFiles()
     {
-        // Simuluje kliknutí na skrytý input[type="file"]
-        await JS.InvokeVoidAsync("document.getElementById", "fileInput", "click");
+        try
+        {
+            // Use direct DOM method
+            await JS.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error triggering file input: {ex.Message}");
+            await JS.InvokeVoidAsync("console.error", "Failed to open file dialog:", ex);
+        }
     }
 
     void Submit()

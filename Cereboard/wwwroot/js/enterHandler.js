@@ -41,7 +41,64 @@ export function setupEnterHandling() {
     // Označíme, že nastavení bylo dokončeno
     setupComplete = true;
 }
+export function shortenImageMarkdown(textAreaId) {
+    try {
+        const textarea = document.getElementById(textAreaId);
+        if (!textarea) return false;
 
+        // Find the actual textarea element in MudBlazor components
+        const input = textarea.querySelector('textarea') || textarea;
+        if (!input) return false;
+
+        // Store the current selection
+        const selStart = input.selectionStart;
+        const selEnd = input.selectionEnd;
+
+        // Create a div that will display the shortened content
+        let overlay = document.getElementById(`${textAreaId}-overlay`);
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = `${textAreaId}-overlay`;
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.right = '0';
+            overlay.style.bottom = '0';
+            overlay.style.overflow = 'auto';
+            overlay.style.padding = input.style.padding || '8px';
+            overlay.style.backgroundColor = 'transparent';
+            overlay.style.fontFamily = window.getComputedStyle(input).fontFamily;
+            overlay.style.fontSize = window.getComputedStyle(input).fontSize;
+            overlay.style.color = window.getComputedStyle(input).color;
+            overlay.style.pointerEvents = 'none'; // Allow clicks to pass through to textarea
+
+            // Position the overlay
+            const inputPos = input.getBoundingClientRect();
+            input.parentNode.style.position = 'relative';
+            input.parentNode.appendChild(overlay);
+        }
+
+        // Get textarea content and replace image markdowns
+        let content = input.value;
+
+        // Replace image markdown with shorter version
+        content = content.replace(/!\[([^\]]*)\]\(([^)]{30})[^)]*\)/g, (match, alt, urlStart) => {
+            return `![${alt}](${urlStart}... 📷)`;
+        });
+
+        // Apply standard whitespace formatting
+        content = content.replace(/\n/g, '<br>');
+        content = content.replace(/\s/g, '&nbsp;');
+
+        // Update the overlay
+        overlay.innerHTML = content;
+
+        return true;
+    } catch (error) {
+        console.error("Error shortening image markdown:", error);
+        return false;
+    }
+}
 // Funkce pro nastavení konkrétního textarea elementu
 function setupTextArea(textarea) {
     // Pokud již má nastavený handler, přeskočíme
@@ -53,7 +110,54 @@ function setupTextArea(textarea) {
     // Označíme, že element má nastavený handler
     textarea._hasEnterHandler = true;
 }
+// Add this to your JavaScript file
+export async function optimizeImageData(dataUrl, maxWidth, maxHeight) {
+    return new Promise((resolve, reject) => {
+        try {
+            // Create an image element
+            const img = new Image();
+            img.onload = function () {
+                // Calculate new dimensions while maintaining aspect ratio
+                let width = img.width;
+                let height = img.height;
 
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+
+                if (height > maxHeight) {
+                    width = (width * maxHeight) / height;
+                    height = maxHeight;
+                }
+
+                // Create a canvas to resize the image
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+
+                // Draw the resized image
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Get the new data URL with reduced quality
+                const newDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+                // Return the optimized data
+                resolve(newDataUrl);
+            };
+
+            img.onerror = function () {
+                reject("Failed to load image");
+            };
+
+            // Set the source to the data URL
+            img.src = dataUrl;
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
 // Handler pro zpracování klávesy
 function handleKeyDown(event) {
     const textarea = event.target;
@@ -222,7 +326,7 @@ export function insertTextAtCursor(textAreaId, startTag, endTag) {
             return false;
         }
 
-        // Pro MudBlazor TextFields, potřebujeme najít skutečný input element
+        // Find the actual textarea element in MudBlazor components
         const input = textarea.querySelector('textarea') || textarea;
 
         if (!input || typeof input.selectionStart !== 'number') {
@@ -235,24 +339,65 @@ export function insertTextAtCursor(textAreaId, startTag, endTag) {
         const text = input.value;
         const selectedText = text.substring(start, end);
 
-        // Vložíme tagy kolem výběru nebo na pozici kurzoru
+        // Insert tags around selection or at cursor position
         const newText = text.substring(0, start) + startTag + selectedText + endTag + text.substring(end);
 
-        // Nastavíme novou hodnotu
+        // Set new value
         input.value = newText;
 
-        // Nastavíme kurzor
+        // Set cursor position
         const newCursorPos = selectedText ? start + startTag.length + selectedText.length + endTag.length : start + startTag.length;
         input.setSelectionRange(newCursorPos, newCursorPos);
         input.focus();
 
-        // Vyvoláme událost input pro aktualizaci bindingu
-        const event = new Event('input', { bubbles: true });
+        // Trigger input event for Blazor binding update
+        const event = new Event('input', { bubbles: true, composed: true });
         input.dispatchEvent(event);
+
+        // For MudBlazor, we may need an extra push for the binding
+        setTimeout(() => {
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }, 10);
 
         return true;
     } catch (error) {
         console.error("Error in insertTextAtCursor:", error);
+        return false;
+    }
+}
+
+export function getCursorPosition(textAreaId) {
+    try {
+        const textarea = document.getElementById(textAreaId);
+        if (!textarea) return 0;
+
+        // Find the actual textarea element in MudBlazor components
+        const input = textarea.querySelector('textarea') || textarea;
+        if (!input || typeof input.selectionStart !== 'number') return 0;
+
+        return input.selectionStart;
+    } catch (error) {
+        console.error("Error getting cursor position:", error);
+        return 0;
+    }
+}
+
+// Set cursor position in a textarea
+export function setCursorPosition(textAreaId, position) {
+    try {
+        const textarea = document.getElementById(textAreaId);
+        if (!textarea) return false;
+
+        // Find the actual textarea element in MudBlazor components
+        const input = textarea.querySelector('textarea') || textarea;
+        if (!input || typeof input.selectionStart !== 'number') return false;
+
+        // Set cursor position
+        input.focus();
+        input.setSelectionRange(position, position);
+        return true;
+    } catch (error) {
+        console.error("Error setting cursor position:", error);
         return false;
     }
 }
