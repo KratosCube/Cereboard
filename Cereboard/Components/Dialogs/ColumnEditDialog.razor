@@ -1,0 +1,59 @@
+﻿@using Cereboard.Shared.Models
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="column.Name" Label="Název sloupce" Variant="Variant.Outlined" 
+                    Class="mb-4" Immediate="true" />
+
+        <MudText Typo="Typo.subtitle1" Class="mb-2">Barva sloupce</MudText>
+
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            @foreach (var color in predefinedColors)
+            {
+                    <MudButton OnClick="@(() => column.Color = color)" 
+                              Style="@($"background-color: {color}; width: 36px; height: 36px; border-radius: 4px; border: {(color == column.Color ? "2px solid #000" : "1px solid #ddd")}")" />
+            }
+        </div>
+
+        <MudTextField @bind-Value="column.Color" Label="Vlastní barva (HEX)" 
+                    Variant="Variant.Outlined"
+                    Adornment="Adornment.Start"
+                    AdornmentIcon="@Icons.Material.Filled.ColorLens"
+                    AdornmentColor="@GetMudColor(column.Color)"
+                    Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Zrušit</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Uložit</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public Column column { get; set; } = new();
+
+    private string[] predefinedColors = new[] {
+        "#f44336", "#e91e63", "#9c27b0", "#673ab7", "#3f51b5",
+        "#2196f3", "#03a9f4", "#00bcd4", "#009688", "#4caf50",
+        "#8bc34a", "#cddc39", "#ffeb3b", "#ffc107", "#ff9800", "#ff5722",
+        "#795548", "#607d8b", "#f5f5f5", "#eeeeee"
+    };
+
+    private Color GetMudColor(string hexColor)
+    {
+        // Simple conversion of common colors to MudBlazor Color enum
+        return hexColor.ToLower() switch
+        {
+            "#f44336" => Color.Error,
+            "#2196f3" => Color.Primary,
+            "#4caf50" => Color.Success,
+            "#ff9800" => Color.Warning,
+            "#607d8b" => Color.Dark,
+            _ => Color.Default
+        };
+    }
+
+    void Submit() => MudDialog.Close(DialogResult.Ok(column));
+    void Cancel() => MudDialog.Cancel();
+}

@@ -1,3 +1,4 @@
+/* Your existing styles */
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
@@ -17,7 +18,7 @@ a, .btn-link {
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+    box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
 }
 
 .content {
@@ -126,24 +127,38 @@ code {
 }
 
 .kanban-column {
-    background-color: #f5f5f5;
+    background-color: white;
     border-radius: 8px;
     width: 300px;
     min-height: 500px;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
+
+    .kanban-column.dragging {
+        opacity: 0.7;
+        transform: scale(0.95);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
 
 .column-header {
     padding: 12px;
     border-bottom: 1px solid #ddd;
+    transition: background-color 0.3s ease;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    cursor: move;
 }
 
 .column-content {
     flex-grow: 1;
     padding: 12px;
     overflow-y: auto;
+    transition: background-color 0.3s ease;
+    min-height: 300px;
 }
 
 .column-footer {
@@ -158,11 +173,95 @@ code {
     margin-bottom: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
     .task-card:hover {
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
+
+    .task-card.dragging {
+        opacity: 0.7;
+        transform: scale(0.95);
+    }
+
 .fullWidth {
     width: 100%;
 }
+
+/* Task drop zone styling */
+.task-dropzone {
+    min-height: 80px;
+    border: 2px dashed transparent;
+    margin-top: 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+    .task-dropzone.drag-active {
+        border-color: var(--mud-palette-primary);
+        background-color: rgba(25, 118, 210, 0.08);
+    }
+
+/* Style for when columns are being dragged */
+.mud-dropzone-entered {
+    background-color: rgba(25, 118, 210, 0.08);
+    border: 2px dashed var(--mud-palette-primary);
+}
+
+/* Markdown preview image styles */
+.markdown-preview img {
+    display: block;
+    max-width: 100%;
+    margin: 8px 0;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* For images in modal dialog */
+.task-detail-dialog .markdown-preview img {
+    max-height: 300px;
+    object-fit: contain;
+}
+
+/* Image placeholder */
+.image-placeholder {
+    background-color: #f0f0f0;
+    min-height: 100px;
+    min-width: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-style: italic;
+    border-radius: 4px;
+}
+
+/* Dialog scrollbar fix */
+::deep .mud-dialog-content {
+    overflow: hidden !important;
+}
+
+/* Remove scrollbar but maintain functionality */
+.column-list {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+}
+
+    .column-list::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Edge */
+    }
+
+/* Drag indicator styling */
+.drag-handle {
+    cursor: move;
+    color: rgba(0, 0, 0, 0.4);
+    transition: color 0.2s;
+}
+
+    .drag-handle:hover {
+        color: rgba(0, 0, 0, 0.7);
+    }
