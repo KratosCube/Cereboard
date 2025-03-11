@@ -3,6 +3,34 @@ let dragData = {};
 let isDraggingTask = false;
 let isDraggingColumn = false;
 let dragDelay = null;
+let currentlyOverColumnId = null;
+let originalColumnPos = null;
+function columnDragLeaveHandler(e) {
+    // Only process if we're dragging a column
+    if (dragData.dragType !== 'column') return;
+
+    e.preventDefault();
+
+    // We need to check if we've actually left the column or just entered a child element
+    // Get the element we're entering
+    const relatedTarget = e.relatedTarget;
+
+    // If the related target is still within this column, don't remove highlight
+    if (this.contains(relatedTarget)) {
+        return;
+    }
+
+    // Remove highlight only from this column
+    this.classList.remove('column-drop-target');
+
+    // If this was the column we were tracking as currently over, clear it
+    const columnId = parseInt(this.id.replace('column-', ''));
+    if (currentlyOverColumnId === columnId) {
+        currentlyOverColumnId = null;
+    }
+
+    console.log(`Left column ${columnId}`);
+}
 
 export function enableDragDrop() {
     console.log("Setting up drag and drop functionality...");
@@ -47,13 +75,15 @@ export function setupDraggableElements() {
         // Set up kanban columns for drop targets
         document.querySelectorAll('.kanban-column').forEach(column => {
             column.removeEventListener('dragenter', columnDragEnterHandler);
+            column.removeEventListener('dragleave', columnDragLeaveHandler); // Add this
             column.removeEventListener('dragover', columnDragOverHandler);
             column.removeEventListener('drop', columnDropHandler);
-
+            
             column.addEventListener('dragenter', columnDragEnterHandler);
+            column.addEventListener('dragleave', columnDragLeaveHandler); // Add this
             column.addEventListener('dragover', columnDragOverHandler);
             column.addEventListener('drop', columnDropHandler);
-
+            
             console.log(`Set up column drop target: ${column.id}`);
         });
 
@@ -124,7 +154,18 @@ function columnDragEnterHandler(e) {
     const sourceId = parseInt(dragData.columnId);
     if (!sourceId || sourceId === targetId) return;
 
-    // Highlight target column
+    // Update which column we're currently over
+    currentlyOverColumnId = targetId;
+
+    // Remove highlight from all other columns first
+    document.querySelectorAll('.column-drop-target').forEach(col => {
+        const colId = parseInt(col.id.replace('column-', ''));
+        if (colId !== targetId) {
+            col.classList.remove('column-drop-target');
+        }
+    });
+
+    // Highlight only this target column
     this.classList.add('column-drop-target');
 
     // Set target column ID
@@ -168,10 +209,24 @@ function columnDragOverHandler(e) {
     if (!targetId) return;
 
     const sourceId = parseInt(dragData.columnId);
-    if (!sourceId || sourceId === targetId) return;
+    if (!sourceId) return;
 
-    // Set target column ID
+    // Check if we're over the original column
+    if (sourceId === targetId) {
+        // We're hovering over the original position
+        column.classList.add('column-original-position');
+        setDragData('targetColumnId', targetId);
+        setDragData('returningToOriginal', true);
+        return;
+    }
+
+    // Normal case - not the original position
+    column.classList.remove('column-original-position');
+    setDragData('returningToOriginal', false);
     setDragData('targetColumnId', targetId);
+}
+export function isReturningToOriginalPosition() {
+    return dragData.returningToOriginal === true;
 }
 
 // Handler for column drop
@@ -222,6 +277,13 @@ function columnDragStartHandler(e) {
             // Store data
             setDragData('dragType', 'column');
             setDragData('columnId', columnId);
+
+            // NEW: Store original position information
+            const rect = column.getBoundingClientRect();
+            originalColumnPos = {
+                id: columnId,
+                rect: rect
+            };
 
             console.log(`Column drag started with ID: ${columnId}`);
         }
@@ -424,6 +486,7 @@ export function onTaskDragEnter(columnId) {
     setDragData('targetColumnId', columnId);
     return true;
 }
+
 export function moveTask(taskId, sourceColumnId, targetColumnId) {
     console.log(`Direct task move request: taskId=${taskId}, sourceColumnId=${sourceColumnId}, targetColumnId=${targetColumnId}`);
     // This function is just a bridge to call Blazor code directly
@@ -446,6 +509,9 @@ export function onDragEnd() {
         header.setAttribute('draggable', 'true');
     });
 
+    // Reset tracking variable
+    currentlyOverColumnId = null;
+
     // Reset state
     isDraggingTask = false;
     isDraggingColumn = false;
@@ -466,6 +532,10 @@ export function clearDragEffects() {
 
         document.querySelectorAll('.dragging-task').forEach(el => {
             el.classList.remove('dragging-task');
+        });
+
+        document.querySelectorAll('.column-original-position').forEach(el => {
+            el.classList.remove('column-original-position');
         });
 
         document.querySelectorAll('.column-drop-target').forEach(el => {
@@ -492,7 +562,7 @@ export function clearDragEffects() {
         document.querySelectorAll('.task-drop-placeholder').forEach(el => {
             el.remove();
         });
-
+        originalColumnPos = null;
         return true;
     } catch (error) {
         console.error("Error clearing drag effects:", error);
@@ -512,7 +582,52 @@ export function setDragData(key, value) {
 
     return true;
 }
+export function animateColumnShift(sourceId, targetId) {
+    // Get all columns
+    const columns = document.querySelectorAll('.kanban-column');
 
+    // Remove existing animations
+    columns.forEach(col => {
+        col.classList.remove('column-shift-animation');
+    });
+
+    // Determine which columns need to shift
+    columns.forEach(col => {
+        const colId = parseInt(col.id.replace('column-', ''));
+        const sourceColumn = document.querySelector(`#column-${sourceId}`);
+        const targetColumn = document.querySelector(`#column-${targetId}`);
+
+        // Skip the source column
+        if (colId === sourceId) return;
+
+        // Only animate columns that are between source and target
+        if (isColumnBetween(col, sourceColumn, targetColumn)) {
+            // Apply the animation class
+            col.classList.add('column-shift-animation');
+            console.log(`Shifting column ${colId}`);
+        }
+    });
+
+    return true;
+}
+
+// Helper function to determine if a column is between source and target
+function isColumnBetween(column, source, target) {
+    if (!source || !target) return false;
+
+    const columnRect = column.getBoundingClientRect();
+    const sourceRect = source.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+
+    // Moving right
+    if (sourceRect.left < targetRect.left) {
+        return columnRect.left > sourceRect.right && columnRect.left < targetRect.right;
+    }
+    // Moving left
+    else {
+        return columnRect.left < sourceRect.left && columnRect.left > targetRect.left;
+    }
+}
 export function getDragData(key) {
     // Make sure we return an integer when needed
     if (key === 'columnId' || key === 'targetColumnId' || key === 'taskId' || key === 'sourceColumnId') {
@@ -525,7 +640,24 @@ export function getDragData(key) {
     console.log(`Get drag data: ${key} = ${value}`);
     return value;
 }
+// Add this function to your dragdrop.js file
+export function adjustColumnHeights() {
+    // Get all columns
+    const columns = document.querySelectorAll('.kanban-column');
 
+    // Reset any explicit heights
+    columns.forEach(column => {
+        column.style.height = 'auto';
+
+        // Get the content area
+        const content = column.querySelector('.column-content');
+        if (content) {
+            content.style.height = 'auto';
+        }
+    });
+
+    return true;
+}
 export function clearDragData() {
     console.log("Clearing drag data");
     dragData = {};
