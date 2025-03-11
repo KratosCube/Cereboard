@@ -126,6 +126,7 @@ code {
     min-height: 600px;
 }
 
+/* Enhanced Column Styles with Animation */
 .kanban-column {
     background-color: white;
     border-radius: 8px;
@@ -135,14 +136,49 @@ code {
     flex-direction: column;
     flex-shrink: 0;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+    position: relative;
 }
 
-    .kanban-column.dragging {
+    .kanban-column.dragging-column {
         opacity: 0.7;
-        transform: scale(0.95);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transform: scale(0.97);
+        z-index: 10;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
+
+    .kanban-column.column-drop-target {
+        box-shadow: 0 0 0 3px var(--mud-palette-primary);
+    }
+
+    .kanban-column.column-shift-animation {
+        transform: translateX(15px);
+    }
+
+/* Column insert indicators */
+.column-insert-before::before {
+    content: '';
+    position: absolute;
+    left: -8px;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: var(--mud-palette-primary);
+    border-radius: 4px;
+    animation: pulse 1.5s infinite;
+}
+
+.column-insert-after::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: var(--mud-palette-primary);
+    border-radius: 4px;
+    animation: pulse 1.5s infinite;
+}
 
 .column-header {
     padding: 12px;
@@ -151,6 +187,7 @@ code {
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     cursor: move;
+    width: 100%;
 }
 
 .column-content {
@@ -159,13 +196,19 @@ code {
     overflow-y: auto;
     transition: background-color 0.3s ease;
     min-height: 300px;
+    width: 100%;
 }
+
+    .column-content.drag-active {
+        background-color: rgba(var(--mud-palette-primary-rgb), 0.08) !important;
+    }
 
 .column-footer {
     padding: 12px;
     border-top: 1px solid #ddd;
 }
 
+/* Enhanced Task Styles with Animation */
 .task-card {
     background-color: white;
     border-radius: 6px;
@@ -173,17 +216,34 @@ code {
     margin-bottom: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    position: relative;
 }
 
     .task-card:hover {
         box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }
 
-    .task-card.dragging {
+    .task-card.dragging-task {
         opacity: 0.7;
-        transform: scale(0.95);
+        transform: scale(0.97);
+        z-index: 10;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
+
+/* Task drop placeholder */
+.task-drop-placeholder {
+    height: 60px;
+    border: 2px dashed var(--mud-palette-primary);
+    border-radius: 6px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mud-palette-primary);
+    background-color: rgba(var(--mud-palette-primary-rgb), 0.05);
+    animation: pulse 1.5s infinite;
+}
 
 .fullWidth {
     width: 100%;
@@ -265,3 +325,18 @@ code {
     .drag-handle:hover {
         color: rgba(0, 0, 0, 0.7);
     }
+
+/* Animation keyframes */
+@keyframes pulse {
+    0% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.6;
+    }
+}

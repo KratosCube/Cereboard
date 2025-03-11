@@ -1,126 +1,251 @@
 ﻿// Store/retrieve drag data
 let dragData = {};
 let isDraggingTask = false;
+let isDraggingColumn = false;
+let dragDelay = null;
 
 export function enableDragDrop() {
     console.log("Setting up drag and drop functionality...");
 
-    // Prevent default behavior on drag over to allow drop
+    // Basic drag-drop setup
     document.addEventListener('dragover', function (e) {
         e.preventDefault();
     }, false);
 
-    // Prevent default behavior on drop to properly handle it
     document.addEventListener('drop', function (e) {
         e.preventDefault();
     }, false);
 
-    // Set up mutation observer to handle dynamically added elements
-    setupDragObserver();
+    // Manually set up all draggable elements and their event handlers
+    setupDraggableElements();
 
-    // Initial setup of existing elements
-    setupColumnHeaderDrag();
-    setupTaskDrag();
-
-    console.log("Drag and drop initialization complete");
+    console.log("Drag and drop initialized");
     return true;
 }
 
-// Setup mutation observer to handle dynamically added elements
-function setupDragObserver() {
-    const observer = new MutationObserver((mutations) => {
-        let needsSetup = false;
+// Setup all draggable elements - this is the main setup function
+export function setupDraggableElements() {
+    console.log("Setting up draggable elements - manual mode");
 
-        mutations.forEach(mutation => {
-            if (mutation.addedNodes.length) {
-                needsSetup = true;
-            }
+    try {
+        // Make column headers draggable
+        document.querySelectorAll('.column-header').forEach(header => {
+            // Force draggable attribute
+            header.setAttribute('draggable', 'true');
+
+            // Remove existing listeners to prevent duplicates
+            header.removeEventListener('dragstart', columnDragStartHandler);
+            header.removeEventListener('dragend', dragEndHandler);
+
+            // Add drag start handler directly
+            header.addEventListener('dragstart', columnDragStartHandler);
+            header.addEventListener('dragend', dragEndHandler);
+
+            console.log(`Set up column header: ${header.id}`);
         });
 
-        if (needsSetup) {
-            setupColumnHeaderDrag();
-            setupTaskDrag();
-        }
-    });
+        // Set up kanban columns for drop targets
+        document.querySelectorAll('.kanban-column').forEach(column => {
+            column.removeEventListener('dragenter', columnDragEnterHandler);
+            column.removeEventListener('dragover', columnDragOverHandler);
+            column.removeEventListener('drop', columnDropHandler);
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+            column.addEventListener('dragenter', columnDragEnterHandler);
+            column.addEventListener('dragover', columnDragOverHandler);
+            column.addEventListener('drop', columnDropHandler);
+
+            console.log(`Set up column drop target: ${column.id}`);
+        });
+
+        // Make tasks draggable
+        document.querySelectorAll('.task-card').forEach(task => {
+            // Force draggable attribute
+            task.setAttribute('draggable', 'true');
+
+            // Remove existing listeners to prevent duplicates
+            task.removeEventListener('dragstart', taskDragStartHandler);
+            task.removeEventListener('dragend', dragEndHandler);
+
+            // Add drag handlers directly
+            task.addEventListener('dragstart', taskDragStartHandler);
+            task.addEventListener('dragend', dragEndHandler);
+
+            // Add mousedown handler to prevent column dragging when clicking tasks
+            task.addEventListener('mousedown', function (e) {
+                // Prevent event from reaching column headers
+                e.stopPropagation();
+
+                // Disable column header dragging during task interaction
+                document.querySelectorAll('.column-header').forEach(h => {
+                    h.setAttribute('draggable', 'false');
+                });
+
+                // Re-enable column headers after a delay
+                setTimeout(() => {
+                    document.querySelectorAll('.column-header').forEach(h => {
+                        h.setAttribute('draggable', 'true');
+                    });
+                }, 100);
+            });
+
+            console.log(`Set up task card: ${task.id}`);
+        });
+
+        // Set up drop zones for column content (for task drops)
+        document.querySelectorAll('.column-content').forEach(content => {
+            content.removeEventListener('dragenter', columnContentDragEnterHandler);
+            content.removeEventListener('dragover', columnContentDragOverHandler);
+            content.removeEventListener('drop', columnContentDropHandler);
+
+            content.addEventListener('dragenter', columnContentDragEnterHandler);
+            content.addEventListener('dragover', columnContentDragOverHandler);
+            content.addEventListener('drop', columnContentDropHandler);
+
+            console.log(`Set up column content drop zone: ${content.id}`);
+        });
+
+        return true;
+    } catch (error) {
+        console.error("Error setting up draggable elements:", error);
+        return false;
+    }
 }
 
-// Column headers drag setup
-export function setupColumnHeaderDrag() {
-    console.log("Setting up column header drag...");
+// Handler for column drag enter
+function columnDragEnterHandler(e) {
+    if (dragData.dragType !== 'column') return;
 
-    document.querySelectorAll('.column-header').forEach(header => {
-        // Ensure it's draggable
-        header.setAttribute('draggable', 'true');
+    e.preventDefault();
 
-        // Remove existing listeners to prevent duplicates
-        header.removeEventListener('dragstart', onColumnDragStart);
-        header.removeEventListener('dragend', onDragEnd);
+    // Get target column ID
+    const targetId = parseInt(this.id.replace('column-', ''));
+    if (!targetId) return;
 
-        // Add fresh listeners
-        header.addEventListener('dragstart', onColumnDragStart);
-        header.addEventListener('dragend', onDragEnd);
+    const sourceId = parseInt(dragData.columnId);
+    if (!sourceId || sourceId === targetId) return;
 
-        console.log(`Column header setup: ${header.id || 'unnamed'}`);
-    });
+    // Highlight target column
+    this.classList.add('column-drop-target');
+
+    // Set target column ID
+    setDragData('targetColumnId', targetId);
+
+    console.log(`Column drag enter: ${targetId} (source: ${sourceId})`);
 }
 
-// Task drag setup
-export function setupTaskDrag() {
-    console.log("Setting up task drag...");
+// Handler for column content drag enter
+function columnContentDragEnterHandler(e) {
+    if (dragData.dragType !== 'task') return;
 
-    document.querySelectorAll('.task-card').forEach(task => {
-        // Ensure it's draggable
-        task.setAttribute('draggable', 'true');
+    e.preventDefault();
+    e.stopPropagation();
 
-        // Remove existing listeners to prevent duplicates
-        task.removeEventListener('dragstart', onTaskDragStart);
-        task.removeEventListener('dragend', onDragEnd);
+    // Get column ID
+    const targetId = parseInt(this.id.replace('column-content-', ''));
+    if (!targetId) return;
 
-        // Add fresh listeners
-        task.addEventListener('dragstart', onTaskDragStart);
-        task.addEventListener('dragend', onDragEnd);
+    // Add highlight
+    this.classList.add('drag-active');
 
-        console.log(`Task setup: ${task.id || 'unnamed'}`);
-    });
+    // Set target column ID
+    setDragData('targetColumnId', targetId);
+
+    console.log(`Column content drag enter: ${targetId}`);
 }
 
-// Event handlers
-function onColumnDragStart(e) {
+// Handler for column drag over
+function columnDragOverHandler(e) {
+    if (dragData.dragType !== 'column') return;
+
+    e.preventDefault();
+
+    // Get current column
+    const column = this.closest('.kanban-column');
+    if (!column) return;
+
+    // Extract column ID
+    const targetId = parseInt(column.id.replace('column-', ''));
+    if (!targetId) return;
+
+    const sourceId = parseInt(dragData.columnId);
+    if (!sourceId || sourceId === targetId) return;
+
+    // Set target column ID
+    setDragData('targetColumnId', targetId);
+}
+
+// Handler for column drop
+function columnDropHandler(e) {
+    if (dragData.dragType !== 'column') return;
+
+    e.preventDefault();
+
+    // Get target column ID
+    const targetId = parseInt(this.id.replace('column-', ''));
+    if (!targetId) return;
+
+    const sourceId = parseInt(dragData.columnId);
+    if (!sourceId || sourceId === targetId) return;
+
+    console.log(`Column dropped: from ${sourceId} to ${targetId}`);
+
+    // Ensure target ID is set
+    setDragData('targetColumnId', targetId);
+}
+
+// Handler for column header drag start
+function columnDragStartHandler(e) {
     console.log("Column drag started", this.id);
 
-    // Prevent task drag events
+    // Critical: Stop propagation and set data transfer
+    e.stopPropagation();
+
+    // Set required dataTransfer for Firefox
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", "column"); // Need this for Firefox
+    }
+
+    // Set drag state
+    isDraggingColumn = true;
     isDraggingTask = false;
 
     // Add visual feedback
     this.classList.add('dragging-column');
-
-    // Find the parent column and add class to it
     const column = this.closest('.kanban-column');
     if (column) {
         column.classList.add('dragging-column');
+
+        // Get column ID
+        const columnId = parseInt(column.id.replace('column-', ''));
+        if (columnId) {
+            // Store data
+            setDragData('dragType', 'column');
+            setDragData('columnId', columnId);
+
+            console.log(`Column drag started with ID: ${columnId}`);
+        }
     }
-
-    // Extract column ID from the header ID
-    const headerId = this.id;
-    const columnId = headerId.replace('column-header-', '');
-
-    // Store data
-    setDragData('dragType', 'column');
-    setDragData('columnId', columnId);
 }
 
-function onTaskDragStart(e) {
+// Handler for task drag start
+function taskDragStartHandler(e) {
     console.log("Task drag started", this.id);
 
-    // Set flag to prevent column drag
-    isDraggingTask = true;
+    // Critical: Stop propagation and set data transfer
+    e.stopPropagation();
 
-    // Disable column header dragging temporarily
+    // Set required dataTransfer for Firefox
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", "task"); // Need this for Firefox
+    }
+
+    // Set drag state
+    isDraggingTask = true;
+    isDraggingColumn = false;
+
+    // Disable column dragging
     document.querySelectorAll('.column-header').forEach(header => {
         header.setAttribute('draggable', 'false');
     });
@@ -128,47 +253,126 @@ function onTaskDragStart(e) {
     // Add visual feedback
     this.classList.add('dragging-task');
 
-    // Extract task ID
-    const taskId = this.id.replace('task-', '');
+    // Get task ID and column ID
+    const taskId = parseInt(this.id.replace('task-', '')) || 0;
+
+    // Find parent column
+    const column = this.closest('.column-content');
+    let columnId = 0;
+    if (column) {
+        columnId = parseInt(column.id.replace('column-content-', '')) || 0;
+    }
 
     // Store data
     setDragData('dragType', 'task');
     setDragData('taskId', taskId);
+    setDragData('sourceColumnId', columnId);
 
-    // Find parent column
-    const column = this.closest('.column-content');
-    if (column) {
-        const columnId = column.id.replace('column-content-', '');
-        setDragData('sourceColumnId', columnId);
+    console.log(`Task drag started: taskId=${taskId}, sourceColumnId=${columnId}`);
+}
+
+// Handler for drag end (both column and task)
+function dragEndHandler(e) {
+    console.log("Drag ended via native event");
+    onDragEnd();
+}
+
+// Handler for column content dragover
+function columnContentDragOverHandler(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // If we're dragging a task, show the placeholder
+    if (dragData.dragType === 'task') {
+        // Add highlight to column
+        this.classList.add('drag-active');
+
+        // Store target column ID
+        const targetId = parseInt(this.id.replace('column-content-', '')) || 0;
+        setDragData('targetColumnId', targetId);
+
+        // Remove existing placeholders
+        document.querySelectorAll('.task-drop-placeholder').forEach(el => el.remove());
+
+        // Check if this column is empty or find where to place the placeholder
+        const tasks = Array.from(this.querySelectorAll('.task-card'));
+
+        // Create placeholder
+        const placeholder = document.createElement('div');
+        placeholder.className = 'task-drop-placeholder';
+        placeholder.innerHTML = '<span>Drop task here</span>';
+
+        if (tasks.length === 0) {
+            // Empty column - add at the top
+            this.insertBefore(placeholder, this.firstChild);
+        } else {
+            // Find closest task to insert before/after
+            const mouseY = e.clientY;
+            let insertBefore = null;
+
+            for (const task of tasks) {
+                const rect = task.getBoundingClientRect();
+                if (mouseY < rect.top + rect.height / 2) {
+                    insertBefore = task;
+                    break;
+                }
+            }
+
+            if (insertBefore) {
+                this.insertBefore(placeholder, insertBefore);
+            } else {
+                // Insert after last task
+                tasks[tasks.length - 1].after(placeholder);
+            }
+        }
     }
 }
 
-function onDragEnd(e) {
-    console.log("Drag ended");
+// Handler for column content drop
+function columnContentDropHandler(e) {
+    // We don't call preventDefault() here to allow Blazor to handle the drop event
 
-    // Remove all styling classes
-    document.querySelectorAll('.dragging-column, .dragging-task, .column-drop-target, .drag-active').forEach(el => {
-        el.classList.remove('dragging-column', 'dragging-task', 'column-drop-target', 'drag-active');
-    });
+    // Only handle task drops
+    if (dragData.dragType !== 'task') return;
 
-    // Re-enable column header dragging
-    document.querySelectorAll('.column-header').forEach(header => {
-        header.setAttribute('draggable', 'true');
-    });
+    // Get target column ID
+    const targetId = parseInt(this.id.replace('column-content-', '')) || 0;
+    if (!targetId) return;
 
-    // Reset flag
-    isDraggingTask = false;
+    // Get task ID
+    const taskId = parseInt(dragData.taskId) || 0;
+    const sourceColumnId = parseInt(dragData.sourceColumnId) || 0;
 
-    // Clear drag data
-    clearDragData();
+    if (!taskId || !sourceColumnId) {
+        console.error("Invalid task data:", dragData);
+        return;
+    }
+
+    console.log(`Task dropped: taskId=${taskId}, from column=${sourceColumnId}, to column=${targetId}`);
+
+    // Store target column ID - this will be used by the Blazor event handler
+    setDragData('targetColumnId', targetId);
+
+    // Don't stop propagation, let the event bubble up to Blazor
 }
 
+
+
+// These functions will be called from Blazor
 export function onColumnDragEnter(columnId) {
-    if (isDraggingTask) return false;
+    console.log("Column drag enter from Blazor:", columnId);
 
-    console.log("Column drag enter:", columnId);
+    // Only process if we're dragging a column
+    if (dragData.dragType !== 'column') return false;
 
-    // Add highlighting to target column
+    // Ensure columnId is an integer
+    columnId = parseInt(columnId) || 0;
+    if (columnId <= 0) return false;
+
+    const sourceId = parseInt(dragData.columnId) || 0;
+    if (sourceId <= 0 || sourceId === columnId) return false;
+
+    // Highlight target column
     const column = document.querySelector(`#column-${columnId}`);
     if (column) {
         column.classList.add('column-drop-target');
@@ -176,33 +380,147 @@ export function onColumnDragEnter(columnId) {
 
     // Store target column ID
     setDragData('targetColumnId', columnId);
+
+    console.log(`Column drag enter from blazor: source=${sourceId}, target=${columnId}`);
     return true;
 }
 
 export function onTaskDragEnter(columnId) {
-    if (!isDraggingTask) return false;
+    console.log("Task drag enter from Blazor:", columnId);
 
-    console.log("Task drag enter column:", columnId);
+    // Only process if we're dragging a task
+    if (dragData.dragType !== 'task') return false;
 
-    // Add highlighting to target column content
+    // Ensure columnId is an integer
+    columnId = parseInt(columnId) || 0;
+    if (columnId <= 0) return false;
+
+    // Highlight target column
     const columnContent = document.querySelector(`#column-content-${columnId}`);
     if (columnContent) {
         columnContent.classList.add('drag-active');
+
+        // Show placeholder for task
+        const tasks = Array.from(columnContent.querySelectorAll('.task-card'));
+
+        // Remove existing placeholders
+        document.querySelectorAll('.task-drop-placeholder').forEach(el => el.remove());
+
+        // Create placeholder
+        const placeholder = document.createElement('div');
+        placeholder.className = 'task-drop-placeholder';
+        placeholder.innerHTML = '<span>Drop task here</span>';
+
+        if (tasks.length === 0) {
+            // Empty column - add at the top
+            columnContent.insertBefore(placeholder, columnContent.firstChild);
+        } else {
+            // Add after last task
+            tasks[tasks.length - 1].after(placeholder);
+        }
     }
 
     // Store target column ID
     setDragData('targetColumnId', columnId);
     return true;
 }
+export function moveTask(taskId, sourceColumnId, targetColumnId) {
+    console.log(`Direct task move request: taskId=${taskId}, sourceColumnId=${sourceColumnId}, targetColumnId=${targetColumnId}`);
+    // This function is just a bridge to call Blazor code directly
+    return DotNet.invokeMethodAsync('Cereboard', 'MoveTaskJS', taskId, sourceColumnId, targetColumnId);
+}
+// Clean up after drag operation
+export function onDragEnd() {
+    console.log("Drag ended function called");
 
-// Data management functions
+    // Clear any pending delays
+    if (dragDelay) {
+        clearTimeout(dragDelay);
+        dragDelay = null;
+    }
+
+    clearDragEffects();
+
+    // Re-enable column dragging
+    document.querySelectorAll('.column-header').forEach(header => {
+        header.setAttribute('draggable', 'true');
+    });
+
+    // Reset state
+    isDraggingTask = false;
+    isDraggingColumn = false;
+
+    // Clear stored data
+    clearDragData();
+}
+
+// Clear visual effects
+export function clearDragEffects() {
+    console.log("Clearing drag effects");
+
+    try {
+        // Remove all visual effects
+        document.querySelectorAll('.dragging-column').forEach(el => {
+            el.classList.remove('dragging-column');
+        });
+
+        document.querySelectorAll('.dragging-task').forEach(el => {
+            el.classList.remove('dragging-task');
+        });
+
+        document.querySelectorAll('.column-drop-target').forEach(el => {
+            el.classList.remove('column-drop-target');
+        });
+
+        document.querySelectorAll('.drag-active').forEach(el => {
+            el.classList.remove('drag-active');
+        });
+
+        document.querySelectorAll('.column-shift-animation').forEach(el => {
+            el.classList.remove('column-shift-animation');
+        });
+
+        document.querySelectorAll('.column-insert-before').forEach(el => {
+            el.classList.remove('column-insert-before');
+        });
+
+        document.querySelectorAll('.column-insert-after').forEach(el => {
+            el.classList.remove('column-insert-after');
+        });
+
+        // Remove task placeholders
+        document.querySelectorAll('.task-drop-placeholder').forEach(el => {
+            el.remove();
+        });
+
+        return true;
+    } catch (error) {
+        console.error("Error clearing drag effects:", error);
+        return false;
+    }
+}
+
+// Data management
 export function setDragData(key, value) {
     dragData[key] = value;
     console.log(`Set drag data: ${key} = ${value}`);
+
+    if (key === 'dragType') {
+        isDraggingTask = (value === 'task');
+        isDraggingColumn = (value === 'column');
+    }
+
     return true;
 }
 
 export function getDragData(key) {
+    // Make sure we return an integer when needed
+    if (key === 'columnId' || key === 'targetColumnId' || key === 'taskId' || key === 'sourceColumnId') {
+        const value = parseInt(dragData[key]) || 0; // Return 0 if null, undefined, or not a number
+        console.log(`Get drag data: ${key} = ${value}`);
+        return value;
+    }
+
     const value = dragData[key] || null;
     console.log(`Get drag data: ${key} = ${value}`);
     return value;
@@ -211,9 +529,15 @@ export function getDragData(key) {
 export function clearDragData() {
     console.log("Clearing drag data");
     dragData = {};
+    isDraggingTask = false;
+    isDraggingColumn = false;
     return true;
 }
 
 export function isTaskBeingDragged() {
     return isDraggingTask;
+}
+
+export function isColumnBeingDragged() {
+    return isDraggingColumn;
 }

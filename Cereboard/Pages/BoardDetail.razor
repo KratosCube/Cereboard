@@ -15,100 +15,107 @@
 }
 else if (board.Columns != null)
 {
-                               <div class="d-flex gap-4 overflow-auto py-4" @ondrop="OnColumnDrop" @ondragover:preventDefault id="columnContainer">
+        <div class="d-flex gap-4 overflow-auto py-4" @ondrop="OnColumnDrop" @ondragover:preventDefault id="columnContainer">
         @foreach (var column in board.Columns.OrderBy(c => c.Order))
         {
-                <div class="kanban-column" style="min-width: 300px; border-radius: 8px; overflow: hidden;"
-                     @key="column.Id"
-                     id="column-@column.Id">
+                    <div class="kanban-column" style="min-width: 300px; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;"
+                         @key="column.Id"
+                         id="column-@column.Id">
 
-                    <!-- Column header - this should be draggable -->
-                    <div class="column-header d-flex justify-space-between align-center pa-3" 
-                         style="background-color: @column.Color; cursor: move;"
-                         id="column-header-@column.Id">
-                        <div class="d-flex align-center">
-                            <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Class="mr-2 mud-text-secondary" />
-                            <MudText Typo="Typo.h6" Style="font-weight: 500;">@column.Name</MudText>
+                        <!-- Column header - this should be draggable -->
+                        <div class="column-header d-flex justify-space-between align-center pa-3" 
+                             style="background-color: @column.Color; cursor: move; width: 100%;"
+                             id="column-header-@column.Id"
+                             draggable="true"
+                             @ondragstart="@(e => OnColumnDragStart(e, column))"
+                             @ondragend="OnDragEnd">
+                            <div class="d-flex align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Class="mr-2 mud-text-secondary" />
+                                <MudText Typo="Typo.h6" Style="font-weight: 500;">@column.Name</MudText>
+                            </div>
+                            <div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" 
+                                             Size="Size.Small" 
+                                             OnClick="@(() => EditColumn(column))" />
+                            </div>
                         </div>
-                        <div>
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit" 
-                                         Size="Size.Small" 
-                                         OnClick="@(() => EditColumn(column))" />
-                        </div>
-                    </div>
 
-                    <!-- Column content for tasks -->
-                    <div class="column-content pa-3" style="background-color: @GetLighterColor(column.Color); min-height: 300px;"
-                         @ondragenter="@(e => OnColumnDragEnter(e, column))"
-                         @ondrop="@(e => OnTaskDrop(e, column))"
-                         id="column-content-@column.Id">
+                        <!-- Column content for tasks -->
+                                <div class="column-content pa-3" style="background-color: @GetLighterColor(column.Color); min-height: 300px; width: 100%;"
+             @ondragenter="@(e => OnColumnDragEnter(e, column))"
+                @ondragover:preventDefault
+             @ondrop="@(e => OnTaskDrop(e, column))"
+             id="column-content-@column.Id">
 
-                        <!-- Tasks go here -->
+                            <!-- Tasks go here -->
                     @foreach (var task in column.Tasks.OrderBy(t => t.Order))
                     {
-                                <div class="task-card mb-3"
-                                     id="task-@task.Id"
-                                     @onclick="@(() => OpenTaskDetail(task))">
-                                    <MudText Typo="Typo.h6">@task.Title</MudText>
-                                    <MudText Typo="Typo.body2">@task.Description</MudText>
+                                    <div class="task-card mb-3"
+                                         id="task-@task.Id"
+                                         draggable="true"
+                                         @ondragstart="@(e => OnTaskDragStart(e, task))"
+                                         @ondragend="OnDragEnd"
+                                         @onclick="@(() => OpenTaskDetail(task))">
+                                        <MudText Typo="Typo.h6">@task.Title</MudText>
+                                        <MudText Typo="Typo.body2">@task.Description</MudText>
                             @if (task.DueDate.HasValue)
                             {
-                                            <MudText Class="mt-2" Typo="Typo.caption">
-                                                Termín: @task.DueDate.Value.ToShortDateString()
-                                            </MudText>
+                                                <MudText Class="mt-2" Typo="Typo.caption">
+                                                    Termín: @task.DueDate.Value.ToShortDateString()
+                                                </MudText>
                             }
-                                </div>
+                                    </div>
                     }
 
-                        <!-- Add task button or form -->
+                            <!-- Add task button or form -->
                     @if (showNewTaskInput && newTaskColumnId == column.Id)
                     {
-                                <div class="pa-2 mt-3 d-flex flex-column gap-2">
-                                    <MudTextField @bind-Value="newTaskTitle" Label="Název úkolu" Variant="Variant.Outlined" Immediate="true" />
-                                    <div class="d-flex gap-2">
-                                        <MudButton Color="Color.Primary" OnClick="SaveNewTask">Přidat</MudButton>
-                                        <MudButton Color="Color.Default" OnClick="CancelNewTask">Zrušit</MudButton>
+                                    <div class="pa-2 mt-3 d-flex flex-column gap-2">
+                                        <MudTextField @bind-Value="newTaskTitle" Label="Název úkolu" Variant="Variant.Outlined" Immediate="true" />
+                                        <div class="d-flex gap-2">
+                                            <MudButton Color="Color.Primary" OnClick="SaveNewTask">Přidat</MudButton>
+                                            <MudButton Color="Color.Default" OnClick="CancelNewTask">Zrušit</MudButton>
+                                        </div>
                                     </div>
-                                </div>
                     }
                     else
                     {
-                                <MudButton FullWidth="true"
-                                         StartIcon="@Icons.Material.Filled.Add"
-                                         Color="Color.Primary"
-                                         Variant="Variant.Text"
-                                         OnClick="@(() => ShowNewTaskInput(column.Id))"
-                                         Class="mt-3">
-                                    Přidat úkol
-                                </MudButton>
+                                    <MudButton FullWidth="true"
+                                             StartIcon="@Icons.Material.Filled.Add"
+                                             Color="Color.Primary"
+                                             Variant="Variant.Text"
+                                             OnClick="@(() => ShowNewTaskInput(column.Id))"
+                                             Class="mt-3">
+                                        Přidat úkol
+                                    </MudButton>
                     }
-                    </div>
-                </div>
-        }
-
-        <!-- Add column button and new column form -->
-        @if (showNewColumnInput)
-        {
-                <div class="pa-4" style="min-width: 300px; background-color: white; border-radius: 8px;">
-                    <div class="d-flex flex-column gap-2">
-                        <MudTextField @bind-Value="newColumnName" Label="Název sloupce" Variant="Variant.Outlined" Immediate="true" />
-                        <div class="d-flex gap-2">
-                            <MudButton Color="Color.Primary" OnClick="SaveNewColumn">Přidat</MudButton>
-                            <MudButton Color="Color.Default" OnClick="CancelNewColumn">Zrušit</MudButton>
                         </div>
                     </div>
-                </div>
         }
 
-        <div style="min-width: 100px;" class="d-flex align-center justify-center">
-            <MudButton Variant="Variant.Outlined"
-                     StartIcon="@Icons.Material.Filled.Add"
-                     Color="Color.Default"
-                     OnClick="ShowNewColumnInput">
-                Přidat sloupec
-            </MudButton>
+            <!-- Add column button and new column form -->
+        @if (showNewColumnInput)
+        {
+                    <div class="pa-4" style="min-width: 300px; background-color: white; border-radius: 8px;">
+                        <div class="d-flex flex-column gap-2">
+                            <MudTextField @bind-Value="newColumnName" Label="Název sloupce" Variant="Variant.Outlined" Immediate="true" />
+                            <div class="d-flex gap-2">
+                                <MudButton Color="Color.Primary" OnClick="SaveNewColumn">Přidat</MudButton>
+                                <MudButton Color="Color.Default" OnClick="CancelNewColumn">Zrušit</MudButton>
+                            </div>
+                        </div>
+                    </div>
+        }
+
+            <div style="min-width: 100px;" class="d-flex align-center justify-center">
+                <MudButton Variant="Variant.Outlined"
+                         StartIcon="@Icons.Material.Filled.Add"
+                         Color="Color.Default"
+                         OnClick="ShowNewColumnInput">
+                    Přidat sloupec
+                </MudButton>
+            </div>
         </div>
-    </div>
 }
 
 @code {
@@ -168,12 +175,18 @@ else if (board.Columns != null)
                 // Initialize drag-drop handling
                 await dragDropModule.InvokeVoidAsync("enableDragDrop");
 
+                // Setup draggable elements
+                if (dragDropModule != null)
+                {
+                    await dragDropModule.InvokeVoidAsync("setupDraggableElements");
+                }
+
                 Console.WriteLine("Drag and drop initialized");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error initializing drag-drop: {ex.Message}");
-                await JS.InvokeVoidAsync("console.error", "Error initializing drag-drop:", ex);
+                await JS.InvokeVoidAsync("console.error", "Error initializing drag-drop:", ex.Message);
             }
         }
     }
@@ -223,12 +236,25 @@ else if (board.Columns != null)
     {
         try
         {
-            await JS.InvokeVoidAsync("console.log", "==== DRAG END ====");
-            await ResetDragState();
+            Console.WriteLine("Drag ended");
+
+            if (dragDropModule != null)
+            {
+                await dragDropModule.InvokeVoidAsync("clearDragData");
+                await dragDropModule.InvokeVoidAsync("clearDragEffects");
+            }
+
+            // Reset state variables
+            isDraggingColumn = false;
+            dragSourceColumnId = 0;
+            dragEnterColumnId = 0;
+            dragTaskId = 0;
+
             StateHasChanged();
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error in drag end: {ex.Message}");
             await JS.InvokeVoidAsync("console.error", "Error in drag end:", ex.Message);
         }
     }
@@ -254,28 +280,27 @@ else if (board.Columns != null)
     {
         try
         {
-            // Test if drag events are working properly
-            await JS.InvokeVoidAsync("console.log", "Column drag start triggered for column: " + column.Name);
-
-            // Explicitly set column drag state
+            // Set state for Blazor
             isDraggingColumn = true;
             dragSourceColumnId = column.Id;
-
-            // Clear task drag state
             dragTaskId = 0;
 
-            // Log the drag start
-            await JS.InvokeVoidAsync("console.log", "==== DRAG START: Column ID: " + column.Id + " ====");
-            await JS.InvokeVoidAsync("console.log", "Current state: dragTaskId=" + dragTaskId + ", dragSourceColumnId=" + dragSourceColumnId + ", isDraggingColumn=" + isDraggingColumn);
+            // Log for debugging
+            Console.WriteLine($"Column drag started: {column.Id}");
 
-            // Add visual cue to the entire column
-            await JS.InvokeVoidAsync("eval", "var el = document.querySelector('#column-" + column.Id + "'); if(el) el.classList.add('dragging-column');");
+            // Set state for JavaScript
+            if (dragDropModule != null)
+            {
+                await dragDropModule.InvokeVoidAsync("setDragData", "dragType", "column");
+                await dragDropModule.InvokeVoidAsync("setDragData", "columnId", column.Id);
 
-            // Log the event data
-            await JS.InvokeVoidAsync("console.log", "Column drag event fired successfully");
+                // Add visual feedback
+                await JS.InvokeVoidAsync("eval", $"document.querySelector('#column-{column.Id}').classList.add('dragging-column');");
+            }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error in column drag start: {ex.Message}");
             await JS.InvokeVoidAsync("console.error", "Error in column drag start:", ex.Message);
         }
     }
@@ -295,10 +320,20 @@ else if (board.Columns != null)
         {
             if (dragDropModule != null)
             {
-                await dragDropModule.InvokeVoidAsync("onColumnDragEnter", column.Id);
-            }
+                string dragType = await dragDropModule.InvokeAsync<string>("getDragData", "dragType");
 
-            dragEnterColumnId = column.Id;
+                if (dragType == "column")
+                {
+                    // Store target column ID in JS
+                    await dragDropModule.InvokeVoidAsync("setDragData", "targetColumnId", column.Id);
+                    await dragDropModule.InvokeVoidAsync("highlightColumnTarget", column.Id);
+
+                    // Set state for Blazor
+                    dragEnterColumnId = column.Id;
+
+                    Console.WriteLine($"Column drag enter: target column {column.Id}");
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -314,49 +349,68 @@ else if (board.Columns != null)
 
             // Check if a column is being dragged
             string dragType = await dragDropModule.InvokeAsync<string>("getDragData", "dragType");
+            Console.WriteLine($"OnColumnDrop: dragType={dragType}");
 
             if (dragType != "column")
             {
-                Console.WriteLine("Ignoring column drop - not a column drag operation");
+                Console.WriteLine("Not a column drag operation - ignoring");
                 return;
             }
 
-            // Get column IDs
+            // Get column IDs with extra validation
             int sourceId = await dragDropModule.InvokeAsync<int>("getDragData", "columnId");
             int targetId = await dragDropModule.InvokeAsync<int>("getDragData", "targetColumnId");
 
+            Console.WriteLine($"OnColumnDrop: sourceId={sourceId}, targetId={targetId}");
+
             if (sourceId <= 0 || targetId <= 0 || sourceId == targetId)
-                return;
-
-            // Find columns
-            var sourceColumn = board.Columns.FirstOrDefault(c => c.Id == sourceId);
-            var targetColumn = board.Columns.FirstOrDefault(c => c.Id == targetId);
-
-            if (sourceColumn != null && targetColumn != null)
             {
-                // Swap orders
-                int sourceOrder = sourceColumn.Order;
-                int targetOrder = targetColumn.Order;
-
-                if (sourceOrder < targetOrder)
-                {
-                    // Moving right
-                    foreach (var col in board.Columns.Where(c => c.Order > sourceOrder && c.Order <= targetOrder))
-                    {
-                        col.Order--;
-                    }
-                    sourceColumn.Order = targetOrder;
-                }
-                else
-                {
-                    // Moving left
-                    foreach (var col in board.Columns.Where(c => c.Order < sourceOrder && c.Order >= targetOrder))
-                    {
-                        col.Order++;
-                    }
-                    sourceColumn.Order = targetOrder;
-                }
+                Console.WriteLine("Invalid column drag parameters");
+                return;
             }
+
+            // Find columns with validation
+            var sourceColumn = board?.Columns.FirstOrDefault(c => c.Id == sourceId);
+            var targetColumn = board?.Columns.FirstOrDefault(c => c.Id == targetId);
+
+            if (sourceColumn == null || targetColumn == null)
+            {
+                Console.WriteLine($"Could not find columns: sourceColumn={(sourceColumn == null ? "null" : "found")}, targetColumn={(targetColumn == null ? "null" : "found")}");
+                return;
+            }
+
+            Console.WriteLine($"Moving column: {sourceColumn.Name} (order:{sourceColumn.Order}) to position of {targetColumn.Name} (order:{targetColumn.Order})");
+
+            // Swap orders
+            int sourceOrder = sourceColumn.Order;
+            int targetOrder = targetColumn.Order;
+
+            if (sourceOrder < targetOrder)
+            {
+                // Moving right - shift columns left
+                Console.WriteLine($"Moving right: shifting columns between {sourceOrder} and {targetOrder}");
+                foreach (var col in board.Columns.Where(c => c.Order > sourceOrder && c.Order <= targetOrder))
+                {
+                    Console.WriteLine($"  Shifting column {col.Name} from order {col.Order} to {col.Order - 1}");
+                    col.Order--;
+                }
+                sourceColumn.Order = targetOrder;
+            }
+            else
+            {
+                // Moving left - shift columns right
+                Console.WriteLine($"Moving left: shifting columns between {targetOrder} and {sourceOrder}");
+                foreach (var col in board.Columns.Where(c => c.Order < sourceOrder && c.Order >= targetOrder))
+                {
+                    Console.WriteLine($"  Shifting column {col.Name} from order {col.Order} to {col.Order + 1}");
+                    col.Order++;
+                }
+                sourceColumn.Order = targetOrder;
+            }
+
+            // Clear drag state
+            await dragDropModule.InvokeVoidAsync("clearDragData");
+            await dragDropModule.InvokeVoidAsync("clearDragEffects");
 
             // Update UI
             StateHasChanged();
@@ -364,6 +418,7 @@ else if (board.Columns != null)
         catch (Exception ex)
         {
             Console.WriteLine($"Error in column drop: {ex.Message}");
+            await JS.InvokeVoidAsync("console.error", "Error in column drop:", ex.Message);
         }
     }
 
@@ -372,31 +427,28 @@ else if (board.Columns != null)
     {
         try
         {
-            // Make sure column headers aren't draggable during task drag
-            await JS.InvokeVoidAsync("eval", @"
-            document.querySelectorAll('.column-header').forEach(el => {
-                el.setAttribute('draggable', 'false');
-            });
-        ");
-
-            // Clear column drag state
+            // Set state for Blazor
             isDraggingColumn = false;
-            dragSourceColumnId = 0;
-
-            // Set task drag state
+            dragSourceColumnId = task.ColumnId;
             dragTaskId = task.Id;
 
-            // Log the drag start
-            await JS.InvokeVoidAsync("console.log", $"==== DRAG START: Task ID: {task.Id} ====");
-            await JS.InvokeVoidAsync("console.log", $"Current state: dragTaskId={dragTaskId}, dragSourceColumnId={dragSourceColumnId}, isDraggingColumn={isDraggingColumn}");
+            // Log for debugging
+            Console.WriteLine($"Task drag started: Task {task.Id} from column {task.ColumnId}");
 
-            // Add visual cue
-            await JS.InvokeVoidAsync("eval", $"document.querySelector('#task-{task.Id}')?.classList.add('dragging-task');");
+            // Set state for JavaScript
+            if (dragDropModule != null)
+            {
+                await dragDropModule.InvokeVoidAsync("setDragData", "dragType", "task");
+                await dragDropModule.InvokeVoidAsync("setDragData", "taskId", task.Id);
+                await dragDropModule.InvokeVoidAsync("setDragData", "sourceColumnId", task.ColumnId);
 
-            args.DataTransfer.EffectAllowed = "move";
+                // Add visual feedback
+                await JS.InvokeVoidAsync("eval", $"document.querySelector('#task-{task.Id}').classList.add('dragging-task');");
+            }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Error in task drag start: {ex.Message}");
             await JS.InvokeVoidAsync("console.error", "Error in task drag start:", ex.Message);
         }
     }
@@ -407,27 +459,29 @@ else if (board.Columns != null)
         {
             if (dragDropModule == null) return;
 
-            // Check if a task is being dragged
-            bool isTaskDrag = await dragDropModule.InvokeAsync<bool>("isTaskBeingDragged");
+            string dragType = await dragDropModule.InvokeAsync<string>("getDragData", "dragType");
+            Console.WriteLine($"Task drop: dragType={dragType}");
 
-            if (!isTaskDrag)
+            if (dragType != "task")
             {
-                Console.WriteLine("Ignoring task drop - not a task drag operation");
+                Console.WriteLine("Not a task drag operation - ignoring");
                 return;
             }
 
-            // Get the task ID
             int taskId = await dragDropModule.InvokeAsync<int>("getDragData", "taskId");
+            int sourceColumnId = await dragDropModule.InvokeAsync<int>("getDragData", "sourceColumnId");
 
-            if (taskId <= 0)
+            Console.WriteLine($"Task drop: taskId={taskId}, from column={sourceColumnId}, to column={targetColumn.Id}");
+
+            if (taskId <= 0 || sourceColumnId <= 0)
             {
-                Console.WriteLine("Invalid task ID in drop");
+                Console.WriteLine("Invalid task data");
                 return;
             }
 
             // Find the task and source column
-            TaskItem? draggedTask = null;
-            Column? sourceColumn = null;
+            TaskItem draggedTask = null;
+            Column sourceColumn = null;
 
             foreach (var col in board.Columns)
             {
@@ -441,8 +495,19 @@ else if (board.Columns != null)
             }
 
             // Skip if already in target column or not found
-            if (sourceColumn == null || draggedTask == null || sourceColumn.Id == targetColumn.Id)
+            if (sourceColumn == null || draggedTask == null)
+            {
+                Console.WriteLine($"Task {taskId} not found or source column null");
                 return;
+            }
+
+            if (sourceColumn.Id == targetColumn.Id)
+            {
+                Console.WriteLine("Task already in target column");
+                return;
+            }
+
+            Console.WriteLine($"Moving task '{draggedTask.Title}' from column '{sourceColumn.Name}' to '{targetColumn.Name}'");
 
             // Move the task
             sourceColumn.Tasks.Remove(draggedTask);
@@ -450,12 +515,19 @@ else if (board.Columns != null)
             draggedTask.Order = targetColumn.Tasks.Any() ? targetColumn.Tasks.Max(t => t.Order) + 1 : 1;
             targetColumn.Tasks.Add(draggedTask);
 
+            Console.WriteLine($"Task moved successfully. New column has {targetColumn.Tasks.Count} tasks.");
+
             // Update UI
-            StateHasChanged();
+            await InvokeAsync(() => StateHasChanged());
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error in task drop: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+            }
+            await JS.InvokeVoidAsync("console.error", "Error in task drop:", ex.Message);
         }
     }
 
@@ -499,7 +571,17 @@ else if (board.Columns != null)
             await JS.InvokeVoidAsync("console.error", "Chyba při otevírání dialogu:", ex.Message);
         }
     }
+    [JSInvokable]
+    public static async Task<bool> MoveTaskJS(int taskId, int sourceColumnId, int targetColumnId)
+    {
+        Console.WriteLine($"MoveTaskJS called with taskId={taskId}, sourceColumnId={sourceColumnId}, targetColumnId={targetColumnId}");
 
+        // You need to implement this logic to update your tasks
+        // Since this is static, you might need a different approach 
+        // or store a reference to your component
+
+        return true;
+    }
     private void ShowNewTaskInput(int columnId)
     {
         showNewTaskInput = true;
